@@ -27,6 +27,24 @@ gets no JS bridge.
 
 *The name is just **Kimi** + **mini**.*
 
+## Screenshots
+
+<img width="2872" height="1896" alt="screenshot-20260718-010416" src="https://github.com/user-attachments/assets/1eb512f0-ac9a-404a-a0fc-eb249f58e564" />
+
+<details>
+<summary>Show more</summary>
+
+<img width="2670" height="1832" alt="screenshot-20260718-010905" src="https://github.com/user-attachments/assets/81780e70-7ede-4944-ba9a-2c2a83fd7405" />
+
+<img width="2880" height="1864" alt="screenshot-20260718-010043" src="https://github.com/user-attachments/assets/aee5e10c-ac75-44ef-84df-d17a1f28c431" />
+
+<img width="2344" height="2388" alt="screenshot-20260718-010235" src="https://github.com/user-attachments/assets/10c1aaa0-5035-457a-8753-38cb198b6656" />
+
+<img width="2084" height="2382" alt="screenshot-20260718-010440" src="https://github.com/user-attachments/assets/eec88c25-1ddd-482b-a536-692c160f4d77" />
+
+</details>
+
+
 ## Install
 
 **Requires:** macOS 14+ · the [Kimi Code](https://github.com/MoonshotAI/kimi-code) CLI (`npm install -g @moonshot-ai/kimi-code`)
