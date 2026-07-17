@@ -1,0 +1,14 @@
+.DS_Store
+.idea
+.vscode
+.codegraph
+.tmp
+.scratch
+docs/superpowers
+target
+dist
+
+# Generated from docs/brand/exports/app-icon-1024.png by package-macos.sh
+packaging/macos/AppIcon.icns
+
+HANDOFF.md

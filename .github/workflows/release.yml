@@ -1,0 +1,173 @@
+name: Release
+
+# Manual only. Version always comes from Cargo.toml (tag = v${version}).
+# Preferred path with no Actions quota: local `make publish-release`.
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create the GitHub Release as a draft"
+        type: boolean
+        default: false
+      skip_existing:
+        description: "No-op if release tag already exists"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  meta:
+    name: resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      skip: ${{ steps.meta.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from Cargo.toml
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' Cargo.toml)"
+          if [[ -z "$version" ]]; then
+            echo "::error::Could not read version from Cargo.toml"
+            exit 1
+          fi
+          tag="v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved Cargo.toml version=$version → tag=$tag"
+
+          skip=false
+          if [[ "${{ inputs.skip_existing }}" == "true" ]]; then
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release $tag already exists; skip_existing=true → skip remaining jobs"
+              skip=true
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build (${{ matrix.arch }})
+    needs: meta
+    if: needs.meta.outputs.skip != 'true'
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+          shared-key: release
+
+      - name: Build + package DMG & zip
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          ./scripts/package-macos.sh \
+            --target ${{ matrix.target }} \
+            --arch ${{ matrix.arch }} \
+            --dmg \
+            --zip
+          ls -lh dist/
+          file "dist/Kimini.app/Contents/MacOS/kimini"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kimini-macos-${{ matrix.arch }}
+          path: |
+            dist/Kimini-*-macos-${{ matrix.arch }}.dmg
+            dist/Kimini-*-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish GitHub Release
+    needs: [meta, build]
+    if: needs.meta.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: kimini-macos-*
+          merge-multiple: true
+
+      - name: List assets
+        run: |
+          find release-assets -type f | sort
+          ls -lh release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: Kimini ${{ needs.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ contains(needs.meta.outputs.version, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## Install (macOS)
+
+            1. Download the build that matches your Mac:
+               - **Apple Silicon** (M1/M2/M3/M4…): `Kimini-*-macos-aarch64.dmg` or `.zip`
+               - **Intel**: `Kimini-*-macos-x86_64.dmg` or `.zip`
+            2. Open the **DMG** and drag **Kimini** into Applications  
+               (or unzip the archive and move `Kimini.app` yourself).
+            3. First launch may need **right-click → Open** (ad-hoc signed; not notarized yet).
+            4. Start the Kimi daemon (`kimi web`), then on **first run only**:
+
+            ```sh
+            open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
+            ```
+
+            Later launches: Dock / Spotlight / `open -a Kimini`.
+
+            ## Assets
+
+            | File | Contents |
+            |------|----------|
+            | `*-macos-aarch64.dmg` | Apple Silicon installer image |
+            | `*-macos-aarch64.zip` | Apple Silicon `Kimini.app` |
+            | `*-macos-x86_64.dmg` | Intel installer image |
+            | `*-macos-x86_64.zip` | Intel `Kimini.app` |
+
+            Requires **macOS 14+**.
+          files: |
+            release-assets/*.dmg
+            release-assets/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

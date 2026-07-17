@@ -1,0 +1,60 @@
+name: CI
+
+# Manual only — macOS runners burn Actions minutes; prefer local `make lint` /
+# `make package-all` when the account has no quota.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: check (${{ matrix.target }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: fmt
+        if: matrix.arch == 'aarch64'
+        run: cargo fmt -- --check
+
+      - name: clippy
+        if: matrix.arch == 'aarch64'
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: package app (smoke)
+        run: |
+          ./scripts/package-macos.sh \
+            --skip-build \
+            --target ${{ matrix.target }} \
+            --arch ${{ matrix.arch }} \
+            --zip
+          ls -lh dist/
+          file "dist/Kimini.app/Contents/MacOS/kimini"
