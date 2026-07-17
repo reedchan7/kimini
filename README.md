@@ -21,7 +21,7 @@ one window, one system WebView, no bundled browser.
 Kimini gives `kimi web` its own window, Dock icon, `⌘Tab` entry and menu
 bar — without shipping a browser. The Rust host is a ~0.9 MB binary;
 rendering, fonts and IME stay with the WebKit already in macOS, so the whole
-app is ~1.2 MB where an Electron wrapper would be 100 MB+. Navigation is
+app is ~1.3 MB where an Electron wrapper would be 100 MB+. Navigation is
 loopback-only: external links open in your default browser, and the page
 gets no JS bridge.
 
@@ -59,6 +59,47 @@ open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
 Start URL: CLI argument → `$KIMINI_URL` → auto-discovery
 (`~/.kimi-code/server/lock` + `server.token`, starting `kimi server run` when needed).
 Language: `$KIMINI_LANG` (`en` / `zh`) → saved preference → system locale.
+
+## Measured footprint
+
+Controlled runs on an M5 Max / macOS 26.5.2: Kimini 0.1.0 versus Chrome
+150.0.7871.128 on the same local Kimi daemon, session data and ~1440 × 900
+content area, with Chrome on a fresh temporary profile and no extensions.
+Samples at 1 Hz over 30–45 s windows, covering the complete client process
+family (Kimini 4 processes, Chrome 6–8); the shared daemon excluded.
+**Bold** marks the better value; Δ is Kimini relative to Chrome.
+
+**Memory** — physical footprint, MiB, median / P95:
+
+| Scenario | Kimini | Chrome | Δ |
+|---|---:|---:|---:|
+| Idle · long session · 120 Hz | **501 / 501** | 517 / 667 | −3% / −25% |
+| Scroll · long session · 120 Hz | **629 / 885** | 716 / 908 | −12% / −3% |
+| Streamed response · 120 Hz | **520 / 522** | 622 / 798 | −16% / −35% |
+
+**CPU** — process-family sum, % of one core, mean / P95:
+
+| Scenario | Kimini | Chrome | Δ mean |
+|---|---:|---:|---:|
+| Idle · long session · 120 Hz | 11.1 / 18.2 | **7.0 / 14.5** | +60% |
+| Scroll · long session · 120 Hz | 18.7 / 37.9 | **11.0 / 22.6** | +70% |
+| Streamed response · 120 Hz | 19.0 / 33.4 | **13.0 / 31.5** | +47% |
+| Idle · default view · 120 Hz | **6.1 / 10.3** | 12.8 / 30.1 | −53% |
+| Idle · default view · 60 Hz | **3.7 / 6.2** | 10.2 / 25.2 | −64% |
+
+The long-session and default-view rows disagree because idle CPU is repaint:
+the page keeps a persistent animation, WebKit repaints it every frame, and the
+cost scales with view complexity × refresh rate — hence Kimini's 40% drop from
+120 Hz to 60 Hz. Chrome instead coalesces page timers into periodic wake-up
+bursts (its 25–30 P95 spikes) and is insensitive to refresh rate; its idle
+repeats varied by up to 2 points and the table shows the settled runs.
+
+Kimini's process family also held less GPU-process memory: 218–249 MiB versus
+274–328 MiB at the median. Per-process GPU utilization needs elevated sampling
+privileges, so system-wide GPU numbers are omitted. On disk, Kimini measured
+1.27 MiB; the Chrome installation was 1.37 GiB with two retained framework
+versions (~705 MiB active). Model response time is not ranked: identical
+prompts varied materially on the shared backend.
 
 ## Build from source
 
