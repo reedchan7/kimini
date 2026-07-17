@@ -118,8 +118,10 @@ Single-site Rust 2024 shell for Kimi Code Web: `wry` (system WebView) + `tao`
   `make publish-release PUBLISH_FLAGS=--dry-run`
 - CI/Release Actions: **manual only** (`workflow_dispatch` on `ci.yml` /
   `release.yml`) — cloud fallback when Actions minutes are available
-- Run: `./target/debug/kimini 'http://127.0.0.1:58627/#token=<daemon-token>'`
-  (first run needs the `#token=` URL; afterwards bare origin suffices)
+- Run: `./target/debug/kimini` — zero-config: discovers the local kimi daemon
+  via `~/.kimi-code/server/lock` + `server.token` (healthz-probed), starting it
+  with `kimi server run` when absent (`src/daemon.rs`). An explicit URL arg /
+  `$KIMINI_URL` skips discovery.
 - Host UI i18n: `src/i18n.rs` (en/zh); Settings… (`Cmd+,`) for language;
   resolve: `$KIMINI_LANG` → pref file → system → en
 - Keep `wry 0.55` + `tao 0.34` pinned together — winit 0.30 SIGSEGVs on

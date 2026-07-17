@@ -29,7 +29,7 @@ gets no JS bridge.
 
 ## Install
 
-**Requires:** macOS 14+ · a running [Kimi Code](https://github.com/MoonshotAI/kimi-code) daemon (`kimi web`)
+**Requires:** macOS 14+ · the [Kimi Code](https://github.com/MoonshotAI/kimi-code) CLI (`npm install -g @moonshot-ai/kimi-code`)
 
 Download from [**Releases**](https://github.com/reedchan7/kimini/releases/latest)
 — `aarch64` for Apple Silicon, `x86_64` for Intel — and drag **Kimini** into
@@ -41,11 +41,11 @@ Download from [**Releases**](https://github.com/reedchan7/kimini/releases/latest
 > `xattr -dr com.apple.quarantine /Applications/Kimini.app`
 
 ```sh
-# First launch — pass the URL `kimi web` prints (contains #token=…), once:
-open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
-
-# Afterwards — the token persists:
+# Zero-config — finds (or starts) the local kimi daemon and signs in:
 open -a Kimini
+
+# Optional — connect to an explicit URL instead:
+open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
 ```
 
 ## Usage
@@ -56,7 +56,8 @@ open -a Kimini
 | `⌘R` | Reload |
 | `⌘[` / `⌘]` | Back / Forward |
 
-Start URL: CLI argument → `$KIMINI_URL` → `http://127.0.0.1:58627/`.
+Start URL: CLI argument → `$KIMINI_URL` → auto-discovery
+(`~/.kimi-code/server/lock` + `server.token`, starting `kimi server run` when needed).
 Language: `$KIMINI_LANG` (`en` / `zh`) → saved preference → system locale.
 
 ## Build from source

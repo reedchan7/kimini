@@ -3,12 +3,18 @@
 //! Single-site shell for Kimi Code Web: one window, one system WebView,
 //! loopback-only navigation. Rendering, GPU compositing, fonts and IME are
 //! all delegated to the OS web engine; the Rust host stays a thin shell.
+//!
+//! Launched with no URL, it discovers (or starts) the local kimi daemon and
+//! connects with the persisted token — zero configuration (see `daemon`).
 
+mod daemon;
 mod i18n;
 
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
@@ -16,9 +22,8 @@ use tao::window::{Window, WindowBuilder, WindowId};
 use url::Url;
 use wry::{NewWindowResponse, WebView, WebViewBuilder};
 
-use i18n::{Lang, Strings, settings_html};
+use i18n::{Lang, Strings, launch_html, settings_html};
 
-const DEFAULT_URL: &str = "http://127.0.0.1:58627/";
 const APP_TITLE: &str = "Kimini";
 
 /// Stable identifier for the persistent WKWebsiteDataStore (macOS 14+).
@@ -29,23 +34,30 @@ const DATA_STORE_ID: [u8; 16] = *b"kimini-data-v001";
 
 enum UserEvent {
     SetTitle(String),
+    /// Load a loopback URL in the main webview (discovery result or manual connect).
+    Navigate(String),
+    /// Update the launch page's status line (key understood by `launch_html`).
+    LaunchStatus(&'static str),
+    /// A page finished loading — replay the last launch status, which may have
+    /// been sent before the launch page's script was ready.
+    PageLoaded,
+    /// IPC message posted by the main webview (the launch page's manual connect).
+    MainIpc(String),
     #[cfg(target_os = "macos")]
     Menu(muda::MenuId),
     #[cfg(target_os = "macos")]
     PrefsMessage(String),
 }
 
-/// First CLI argument wins, then `$KIMINI_URL`, then the default local daemon.
-///
-/// Pass the full `…/#token=…` URL on first run: kimi-web reads the token from
-/// `location.hash` and persists it to localStorage, so later launches only
-/// need the bare origin.
-fn initial_url() -> String {
+/// First CLI argument wins, then `$KIMINI_URL`. `None` means zero-config:
+/// discover (or start) the local kimi daemon and connect with its persisted
+/// token. An explicit URL skips discovery entirely — useful for a non-default
+/// `KIMI_CODE_HOME` or a port-forwarded daemon.
+fn explicit_url() -> Option<String> {
     env::args()
         .nth(1)
         .or_else(|| env::var("KIMINI_URL").ok())
         .filter(|u| !u.is_empty())
-        .unwrap_or_else(|| DEFAULT_URL.to_string())
 }
 
 /// Only loopback origins may navigate inside the shell.
@@ -269,15 +281,27 @@ fn main() -> wry::Result<()> {
         .expect("create window");
     let main_id: WindowId = window.id();
 
-    let url = initial_url();
-    eprintln!("kimini: loading {}", origin_of(&url));
+    let explicit = explicit_url();
+    match &explicit {
+        Some(url) => eprintln!("kimini: loading {}", origin_of(url)),
+        None => eprintln!("kimini: no URL given — discovering the local kimi daemon"),
+    }
 
     let title_proxy = proxy.clone();
+    let ipc_proxy = proxy.clone();
+    let load_proxy = proxy.clone();
     let builder = WebViewBuilder::new()
-        .with_url(&url)
         .with_devtools(cfg!(debug_assertions))
         .with_document_title_changed_handler(move |title| {
             let _ = title_proxy.send_event(UserEvent::SetTitle(title));
+        })
+        .with_ipc_handler(move |req| {
+            let _ = ipc_proxy.send_event(UserEvent::MainIpc(req.body().to_string()));
+        })
+        .with_on_page_load_handler(move |event, _url| {
+            if matches!(event, wry::PageLoadEvent::Finished) {
+                let _ = load_proxy.send_event(UserEvent::PageLoaded);
+            }
         })
         .with_navigation_handler(|target| {
             if is_loopback(&target) {
@@ -295,6 +319,10 @@ fn main() -> wry::Result<()> {
                 NewWindowResponse::Deny
             }
         });
+    let builder = match &explicit {
+        Some(url) => builder.with_url(url),
+        None => builder.with_html(launch_html(lang_cell.get())),
+    };
 
     #[cfg(target_os = "macos")]
     let builder = {
@@ -303,6 +331,24 @@ fn main() -> wry::Result<()> {
     };
 
     let webview = builder.build(&window)?;
+
+    // Zero-config: discover (or start) the daemon off the UI thread; the
+    // launch page shows progress until `Navigate` arrives. A manual connect
+    // sets the stop flag so the loop exits instead of racing the user.
+    let discovery_stop = Arc::new(AtomicBool::new(false));
+    let last_launch_status: Cell<Option<&'static str>> = Cell::new(None);
+    if explicit.is_none() {
+        let discovery_proxy = proxy.clone();
+        let stop = Arc::clone(&discovery_stop);
+        std::thread::spawn(move || {
+            let notify = |status: daemon::Status| {
+                let _ = discovery_proxy.send_event(UserEvent::LaunchStatus(status.key()));
+            };
+            if let Some(url) = daemon::discover(&stop, &notify) {
+                let _ = discovery_proxy.send_event(UserEvent::Navigate(url));
+            }
+        });
+    }
 
     event_loop.run(move |event, target, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -328,6 +374,42 @@ fn main() -> wry::Result<()> {
                 #[cfg(debug_assertions)]
                 eprintln!("kimini: page title set ({} chars)", title.len());
                 window.set_title(if title.is_empty() { APP_TITLE } else { &title });
+            }
+            Event::UserEvent(UserEvent::Navigate(url)) => {
+                discovery_stop.store(true, Ordering::Relaxed);
+                last_launch_status.set(None);
+                // Log the origin only — the token rides in the fragment.
+                eprintln!("kimini: loading {}", origin_of(&url));
+                if let Err(e) = webview.load_url(&url) {
+                    eprintln!("kimini: failed to load URL: {e}");
+                }
+            }
+            Event::UserEvent(UserEvent::LaunchStatus(key)) => {
+                last_launch_status.set(Some(key));
+                let _ = webview.evaluate_script(&format!(
+                    "window.__kiminiStatus && window.__kiminiStatus('{key}')"
+                ));
+            }
+            Event::UserEvent(UserEvent::PageLoaded) => {
+                if let Some(key) = last_launch_status.get() {
+                    let _ = webview.evaluate_script(&format!(
+                        "window.__kiminiStatus && window.__kiminiStatus('{key}')"
+                    ));
+                }
+            }
+            Event::UserEvent(UserEvent::MainIpc(msg)) => {
+                // Only the launch page posts messages today; a hostile page
+                // gains nothing — connect targets are loopback-gated.
+                if let Some(raw) = msg.trim().strip_prefix("connect=") {
+                    let raw = raw.trim();
+                    if is_loopback(raw) {
+                        let _ = proxy.send_event(UserEvent::Navigate(raw.to_string()));
+                    } else {
+                        let _ = webview.evaluate_script(
+                            "window.__kiminiStatus && window.__kiminiStatus('invalidUrl')",
+                        );
+                    }
+                }
             }
             #[cfg(target_os = "macos")]
             Event::UserEvent(UserEvent::Menu(id)) => match id.0.as_str() {
