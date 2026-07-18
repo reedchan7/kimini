@@ -4,137 +4,184 @@
 
 # Kimini
 
-**The lightest way to browse.**
+**Native Kimi Code, with the Web fallback intact.**
 
-A ~1 MB native macOS app for [Kimi Code Web](https://github.com/MoonshotAI/kimi-code) —
-one window, one system WebView, no bundled browser.
+A Rust 2024 desktop client for [Kimi Code](https://github.com/MoonshotAI/kimi-code).
 
 <a href="https://github.com/reedchan7/kimini/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/reedchan7/kimini/ci.yml?branch=main&style=flat-square&label=CI&logo=github" alt="CI"/></a>
 <a href="https://github.com/reedchan7/kimini/releases/latest"><img src="https://img.shields.io/github/v/release/reedchan7/kimini?style=flat-square&logo=github&color=4A90D9" alt="Release"/></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License MIT"/></a>
 <img src="https://img.shields.io/badge/platform-macOS%2014%2B-black?style=flat-square&logo=apple&logoColor=white" alt="macOS 14+"/>
 
-**English** · [中文](README_CN.md)
-
 </div>
 
-Kimini gives `kimi web` its own window, Dock icon, `⌘Tab` entry and menu
-bar — without shipping a browser. The Rust host is a ~0.9 MB binary;
-rendering, fonts and IME stay with the WebKit already in macOS, so the whole
-app is ~1.3 MB where an Electron wrapper would be 100 MB+. Navigation is
-loopback-only: external links open in your default browser, and the page
-gets no JS bridge.
+Kimini ships two independent applications that can be installed and run side
+by side:
 
-*The name is just **Kimi** + **mini**.*
+| Application | Purpose | Permanent renderer |
+|---|---|---|
+| **Kimini** | Native Kimi Code GUI | GPUI / Metal |
+| **Kimini Web** | Complete compatibility surface | System WKWebView |
 
-## Screenshots
+Both applications discover the same local Kimi daemon and use the same session
+data. The native client talks directly to the daemon's typed REST and WebSocket
+contracts; it does not wrap Kimi Code Web or parse terminal output.
 
-<img width="2872" height="1896" alt="screenshot-20260718-010416" src="https://github.com/user-attachments/assets/1eb512f0-ac9a-404a-a0fc-eb249f58e564" />
+> [!IMPORTANT]
+> The native application is at the G0 engineering checkpoint. Session loading,
+> virtualized conversation rendering, streaming, prompt submission, stop,
+> approvals, single-choice questions, authoritative snapshot recovery,
+> accessibility semantics, and an on-demand WRY child browser are implemented.
+> Kimini Web remains the complete product surface while native parity is built
+> in stages.
 
-<details>
-<summary>Show more</summary>
+## Architecture
 
-<img width="2670" height="1832" alt="screenshot-20260718-010905" src="https://github.com/user-attachments/assets/81780e70-7ede-4944-ba9a-2c2a83fd7405" />
+```text
+Kimi daemon
+  ├── REST snapshots and commands
+  └── journaled WebSocket events
+          ↓
+protocol → model reducer → cached presentation → GPUI views
+    ↑             ↓
+ typed API   user commands
 
-<img width="2880" height="1864" alt="screenshot-20260718-010043" src="https://github.com/user-attachments/assets/aee5e10c-ac75-44ef-84df-d17a1f28c431" />
+On demand only:
+GPUI browser slot → bounded WRY child WKWebView
+Future agent use  → isolated Chromium browser broker / MCP / CDP
+```
 
-<img width="2344" height="2388" alt="screenshot-20260718-010235" src="https://github.com/user-attachments/assets/10c1aaa0-5035-457a-8753-38cb198b6656" />
+The source is split by responsibility:
 
-<img width="2084" height="2382" alt="screenshot-20260718-010440" src="https://github.com/user-attachments/assets/eec88c25-1ddd-482b-a536-692c160f4d77" />
+- `src/protocol/` — tolerant wire DTOs and cursor/control contracts.
+- `src/model/` — deterministic session reducer with no GUI or network code.
+- `src/api/` — local REST client and bounded WebSocket event worker.
+- `src/daemon/` — discovery, health probing, token loading, and startup.
+- `src/native/` — GPUI composition, presentation cache, views, and browser host.
+- `src/legacy_web/` — isolated Kimini Web compatibility application.
 
-</details>
+## Native G0
 
+The current native path includes:
+
+- zero-configuration local daemon discovery and startup;
+- typed session list, snapshot, prompt, abort, approval, and question requests;
+- sequence/epoch cursor handling, duplicate suppression, and authoritative
+  snapshot reload after cursor gaps or socket closure;
+- UTF-16 stream offsets, step-relative stream resets, subagent isolation, and
+  unknown-event tolerance;
+- bounded lossless event delivery from a dedicated WebSocket worker;
+- variable-height conversation virtualization and cached transcript projection;
+- native composer, streaming assistant output, pending approvals, and questions;
+- AccessKit roles, labels, focus traversal, and native CJK input plumbing;
+- a rectangular WRY child view that is created only after an explicit browser
+  action and destroyed when closed.
+
+The embedded browser is for human preview and OAuth. Deterministic model-driven
+browsing remains a separate future subsystem with an isolated Chromium profile,
+MCP/CDP control, explicit takeover, and independent permissions.
+
+WKWebView has an important lifecycle constraint: closing the child view removes
+its WebContent process, while macOS may retain pooled GPU and Networking helpers
+until the host exits. Work that requires complete browser-process teardown must
+run in the isolated browser companion process.
 
 ## Install
 
-**Requires:** macOS 14+ · the [Kimi Code](https://github.com/MoonshotAI/kimi-code) CLI (`npm install -g @moonshot-ai/kimi-code`)
-
-Download from [**Releases**](https://github.com/reedchan7/kimini/releases/latest)
-— `aarch64` for Apple Silicon, `x86_64` for Intel — and drag **Kimini** into
-**Applications**.
-
-> [!NOTE]
-> Builds are ad-hoc signed, so Gatekeeper blocks the first open:
-> right-click → **Open**, or
-> `xattr -dr com.apple.quarantine /Applications/Kimini.app`
+**Requires:** macOS 14+ and the
+[Kimi Code](https://github.com/MoonshotAI/kimi-code) CLI.
 
 ```sh
-# Zero-config — finds (or starts) the local kimi daemon and signs in:
-open -a Kimini
-
-# Optional — connect to an explicit URL instead:
-open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
+npm install -g @moonshot-ai/kimi-code
 ```
 
-## Usage
+Release assets are named separately:
 
-| | |
-|---|---|
-| `⌘,` | Settings — host UI language (English / 简体中文) |
-| `⌘R` | Reload |
-| `⌘[` / `⌘]` | Back / Forward |
+- `Kimini-<version>-macos-<arch>` — native GPUI application.
+- `Kimini-Web-<version>-macos-<arch>` — Web compatibility application.
 
-Start URL: CLI argument → `$KIMINI_URL` → auto-discovery
-(`~/.kimi-code/server/lock` + `server.token`, starting `kimi server run` when needed).
-Language: `$KIMINI_LANG` (`en` / `zh`) → saved preference → system locale.
+Builds are currently ad-hoc signed. The first launch may require right-clicking
+the app and choosing **Open**.
 
-## Measured footprint
+## Run from source
 
-Controlled runs on an M5 Max / macOS 26.5.2: Kimini 0.1.0 versus Chrome
-150.0.7871.128 on the same local Kimi daemon, session data and ~1440 × 900
-content area, with Chrome on a fresh temporary profile and no extensions.
-Samples at 1 Hz over 30–45 s windows, covering the complete client process
-family (Kimini 4 processes, Chrome 6–8); the shared daemon excluded.
-**Bold** marks the better value; Δ is Kimini relative to Chrome.
+```sh
+make run                         # Native Kimini
+make run-web                     # Kimini Web, automatic daemon discovery
+make run-web URL='http://127.0.0.1:58627/#token=<daemon-token>'
+
+# Open a human-browser URL with the native app for integration work
+KIMINI_BROWSER_URL='https://example.com' make run
+```
+
+Native startup resolves the daemon from `~/.kimi-code/server/lock` and
+`server.token`, health-probes it, and starts `kimi server run` when needed.
+Bearer tokens remain in headers or the WebSocket subprotocol and never enter
+the native browser URL, logs, or rendered state.
+
+## Build and package
+
+```sh
+make build        # Native debug binary
+make build-web    # Web compatibility debug binary
+make apps         # dist/Kimini.app + dist/Kimini Web.app
+make package-all  # both apps, both macOS architectures, DMG + zip
+make lint
+make test
+make coverage-core
+```
+
+`coverage-core` enforces at least 90% line coverage for the protocol and pure
+application-state core. Platform glue is exercised through real daemon, real
+window, accessibility-tree, browser-lifecycle, and packaged-app scenarios.
+
+## Kimini Web measured footprint
+
+The following measurements apply to the **Kimini Web** compatibility app, not
+the native G0 client. Controlled runs used an M5 Max / macOS 26.5.2, Kimini Web
+0.1.0, Chrome 150.0.7871.128, the same local Kimi daemon and session data, and a
+roughly 1440 × 900 content area. Samples were collected at 1 Hz over 30–45 s
+windows for the complete client process family; the shared daemon was excluded.
 
 **Memory** — physical footprint, MiB, median / P95:
 
-| Scenario | Kimini | Chrome | Δ |
+| Scenario | Kimini Web | Chrome | Delta |
 |---|---:|---:|---:|
-| Idle · long session · 120 Hz | **501 / 501** | 517 / 667 | −3% / −25% |
-| Scroll · long session · 120 Hz | **629 / 885** | 716 / 908 | −12% / −3% |
-| Streamed response · 120 Hz | **520 / 522** | 622 / 798 | −16% / −35% |
+| Idle · long session · 120 Hz | **501 / 501** | 517 / 667 | -3% / -25% |
+| Scroll · long session · 120 Hz | **629 / 885** | 716 / 908 | -12% / -3% |
+| Streamed response · 120 Hz | **520 / 522** | 622 / 798 | -16% / -35% |
 
-**CPU** — process-family sum, % of one core, mean / P95:
+**CPU** — process-family sum, percent of one core, mean / P95:
 
-| Scenario | Kimini | Chrome | Δ mean |
+| Scenario | Kimini Web | Chrome | Delta mean |
 |---|---:|---:|---:|
 | Idle · long session · 120 Hz | 11.1 / 18.2 | **7.0 / 14.5** | +60% |
 | Scroll · long session · 120 Hz | 18.7 / 37.9 | **11.0 / 22.6** | +70% |
 | Streamed response · 120 Hz | 19.0 / 33.4 | **13.0 / 31.5** | +47% |
-| Idle · default view · 120 Hz | **6.1 / 10.3** | 12.8 / 30.1 | −53% |
-| Idle · default view · 60 Hz | **3.7 / 6.2** | 10.2 / 25.2 | −64% |
+| Idle · default view · 120 Hz | **6.1 / 10.3** | 12.8 / 30.1 | -53% |
+| Idle · default view · 60 Hz | **3.7 / 6.2** | 10.2 / 25.2 | -64% |
 
-The long-session and default-view rows disagree because idle CPU is repaint:
-the page keeps a persistent animation, WebKit repaints it every frame, and the
-cost scales with view complexity × refresh rate — hence Kimini's 40% drop from
-120 Hz to 60 Hz. Chrome instead coalesces page timers into periodic wake-up
-bursts (its 25–30 P95 spikes) and is insensitive to refresh rate; its idle
-repeats varied by up to 2 points and the table shows the settled runs.
-
-Kimini's process family also held less GPU-process memory: 218–249 MiB versus
-274–328 MiB at the median. Per-process GPU utilization needs elevated sampling
-privileges, so system-wide GPU numbers are omitted. On disk, Kimini measured
-1.27 MiB; the Chrome installation was 1.37 GiB with two retained framework
-versions (~705 MiB active). Model response time is not ranked: identical
-prompts varied materially on the shared backend.
-
-## Build from source
-
-```sh
-make app            # → dist/Kimini.app   (Rust 1.85+)
-make install-app    # → ~/Applications
-make help           # everything else: run, lint, dmg, package-all, publish-release
-```
+The long-session and default-view rows differ because the web page has a
+persistent animation and repaint cost scales with view complexity and refresh
+rate. These figures motivated the native renderer; they are not evidence for a
+native performance win. Native results will be published only after matched
+short-, long-, streaming-, and browser-lifecycle runs cover every process.
 
 ## Notes
 
-- Loopback origins only (`127.0.0.1` / `::1` / `localhost`); devtools off in release.
-- Not notarized yet; IME in the bundled `.app` not fully re-verified; macOS only.
+- Native GUI dependencies track Zed GPUI and gpui-component through exact
+  `Cargo.lock` revisions because current AccessKit support is newer than the
+  crates.io GPUI release.
+- `wry 0.55` and `tao 0.34` remain paired for the Web compatibility app.
+- macOS is the first target. Windows and Linux require separate input,
+  accessibility, child-surface, and packaging acceptance.
+- The project is unofficial and is not affiliated with Moonshot AI.
 
 ---
 
-[MIT](LICENSE) · Built on [wry](https://github.com/tauri-apps/wry) /
-[tao](https://github.com/tauri-apps/tao) /
-[muda](https://github.com/tauri-apps/muda) ·
-Unofficial project, not affiliated with Moonshot AI.
+[MIT](LICENSE) · Built with
+[GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui),
+[gpui-component](https://github.com/longbridge/gpui-component),
+[wry](https://github.com/tauri-apps/wry),
+[tao](https://github.com/tauri-apps/tao), and
+[muda](https://github.com/tauri-apps/muda).

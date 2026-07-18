@@ -7,10 +7,13 @@
 # Config
 # ---------------------------------------------------------------------------
 BIN       := kimini
+WEB_BIN   := kimini-web
 CARGO     ?= cargo
 URL       ?=
+BROWSER_URL ?=
 DEBUG_BIN := target/debug/$(BIN)
 REL_BIN   := target/release/$(BIN)
+WEB_REL_BIN := target/release/$(WEB_BIN)
 
 # ANSI (disabled when stdout is not a TTY, or when NO_COLOR is set)
 ifeq ($(NO_COLOR),)
@@ -28,8 +31,10 @@ endif
 
 # macOS app packaging
 APP_NAME  := Kimini
+WEB_APP_NAME := Kimini Web
 DIST      := dist
 APP_BUNDLE := $(DIST)/$(APP_NAME).app
+WEB_APP_BUNDLE := $(DIST)/$(WEB_APP_NAME).app
 INSTALL_DIR ?= $(HOME)/Applications
 PACKAGE_SH := scripts/package-macos.sh
 PUBLISH_SH := scripts/publish-release.sh
@@ -39,9 +44,10 @@ ARCH      ?=
 # Extra flags for publish-release (e.g. PUBLISH_FLAGS=--dry-run)
 PUBLISH_FLAGS ?=
 
-.PHONY: help build release run run-release check test fmt fmt-check clippy lint \
-        clean clean-dist size install doctor app dmg zip package-all \
-        publish-release install-app open-app
+.PHONY: help build build-web release release-web run run-web run-release \
+        check test coverage-core fmt fmt-check clippy lint clean clean-dist size install doctor \
+        app app-native app-web apps dmg dmg-web zip zip-web package-all \
+        publish-release install-app install-web-app open-app open-web-app
 
 # ---------------------------------------------------------------------------
 # Help (default)
@@ -57,7 +63,7 @@ help: ## Show this help
 	@printf '  ██║  ██╗██║██║ ╚═╝ ██║██║██║ ╚████║██║\n'
 	@printf '  ╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝\n'
 	@printf '$(C_RESET)'
-	@printf '  $(C_DIM)The lightest way to browse. · Kimi Code Web shell$(C_RESET)\n\n'
+	@printf '  $(C_DIM)Native Kimi Code · Web compatibility kept intact$(C_RESET)\n\n'
 	@printf '  $(C_BOLD)Usage:$(C_RESET)  make $(C_GREEN)<target>$(C_RESET)  [$(C_YELLOW)VAR=value$(C_RESET) …]\n\n'
 	@awk 'BEGIN { \
 	    FS = ":.*##"; \
@@ -71,7 +77,8 @@ help: ## Show this help
 	    printf "    $(C_GREEN)%-16s$(C_RESET) %s\n", $$1, $$2; \
 	  }' $(MAKEFILE_LIST)
 	@printf '\n  $(C_BOLD)Variables:$(C_RESET)\n'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'URL' 'Start URL for run/run-release/open-app (optional)'
+	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'URL' 'Kimini Web daemon URL (optional)'
+	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'BROWSER_URL' 'Native human-browser start URL (optional)'
 	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'CARGO' 'Cargo binary (default: cargo)'
 	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'INSTALL_DIR' 'App install path (default: ~/Applications)'
 	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'TARGET' 'cargo target triple (optional)'
@@ -79,7 +86,8 @@ help: ## Show this help
 	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'PUBLISH_FLAGS' 'Extra flags for publish-release (e.g. --dry-run)'
 	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'NO_COLOR' 'Set to disable ANSI colors in help'
 	@printf '\n  $(C_DIM)Examples:$(C_RESET)\n'
-	@printf '    make run URL='"'"'http://127.0.0.1:58627/#token=…'"'"'\n'
+	@printf '    make run BROWSER_URL='"'"'https://example.com'"'"'\n'
+	@printf '    make run-web URL='"'"'http://127.0.0.1:58627/#token=…'"'"'\n'
 	@printf '    make app && make install-app\n'
 	@printf '    make dmg && make zip\n'
 	@printf '    make package-all\n'
@@ -93,10 +101,16 @@ help: ## Show this help
 ##@ Build
 
 build: ## Debug build
-	$(CARGO) build
+	$(CARGO) build --bin $(BIN) --no-default-features --features native
 
-release: ## Release build (LTO + size-optimized)
-	$(CARGO) build --release
+build-web: ## Debug build for Kimini Web
+	$(CARGO) build --bin $(WEB_BIN) --no-default-features --features legacy-web
+
+release: ## Optimized release build
+	$(CARGO) build --release --bin $(BIN) --no-default-features --features native
+
+release-web: ## Release build for Kimini Web
+	$(CARGO) build --release --bin $(WEB_BIN) --no-default-features --features legacy-web
 
 # ---------------------------------------------------------------------------
 # macOS Application
@@ -112,39 +126,70 @@ ifneq ($(ARCH),)
   PACKAGE_FLAGS += --arch $(ARCH)
 endif
 
-app: ## Build release + package dist/Kimini.app
+app: app-native ## Build release + package dist/Kimini.app
+
+app-native: ## Build native dist/Kimini.app
 	@test "$$(uname -s)" = "Darwin" || { echo "error: app packaging requires macOS"; exit 1; }
-	./$(PACKAGE_SH) $(PACKAGE_FLAGS)
+	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS)
+
+app-web: ## Build legacy dist/Kimini Web.app
+	@test "$$(uname -s)" = "Darwin" || { echo "error: app packaging requires macOS"; exit 1; }
+	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS)
+
+apps: app-native app-web ## Build both macOS apps
 
 dmg: ## Build .app + DMG (Kimini-<ver>-macos-<arch>.dmg)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: dmg packaging requires macOS"; exit 1; }
-	./$(PACKAGE_SH) $(PACKAGE_FLAGS) --dmg
+	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS) --dmg
+
+dmg-web: ## Build Kimini Web DMG
+	@test "$$(uname -s)" = "Darwin" || { echo "error: dmg packaging requires macOS"; exit 1; }
+	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --dmg
 
 zip: ## Build .app + zip archive for distribution
 	@test "$$(uname -s)" = "Darwin" || { echo "error: zip packaging requires macOS"; exit 1; }
-	./$(PACKAGE_SH) $(PACKAGE_FLAGS) --zip
+	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS) --zip
+
+zip-web: ## Build Kimini Web zip archive
+	@test "$$(uname -s)" = "Darwin" || { echo "error: zip packaging requires macOS"; exit 1; }
+	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --zip
 
 package-all: ## Build aarch64 + x86_64 DMG and zip into dist/
 	@test "$$(uname -s)" = "Darwin" || { echo "error: package-all requires macOS"; exit 1; }
-	./$(PACKAGE_SH) --target aarch64-apple-darwin --arch aarch64 --dmg --zip
-	./$(PACKAGE_SH) --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app native --target aarch64-apple-darwin --arch aarch64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app web --target aarch64-apple-darwin --arch aarch64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app native --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app web --target x86_64-apple-darwin --arch x86_64 --dmg --zip
 	@ls -lh '$(DIST)'/*.dmg '$(DIST)'/*.zip 2>/dev/null || true
 
 publish-release: ## Local dual-arch package + GitHub Release (version from Cargo.toml)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release requires macOS"; exit 1; }
-	./$(PUBLISH_SH) $(PUBLISH_FLAGS)
+	bash ./$(PUBLISH_SH) $(PUBLISH_FLAGS)
 
 install-app: ## Package and install .app to INSTALL_DIR (default: ~/Applications)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: install-app requires macOS"; exit 1; }
-	./$(PACKAGE_SH) $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
+	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
 
-open-app: ## Open the packaged app (builds if missing); pass URL='…' on first auth
+install-web-app: ## Package and install Kimini Web.app
+	@test "$$(uname -s)" = "Darwin" || { echo "error: install-app requires macOS"; exit 1; }
+	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
+
+open-app: ## Open native packaged app; BROWSER_URL='…' opens the browser pane
 	@test "$$(uname -s)" = "Darwin" || { echo "error: open-app requires macOS"; exit 1; }
-	@if [ ! -d '$(APP_BUNDLE)' ]; then ./$(PACKAGE_SH) $(PACKAGE_FLAGS); fi
-	@if [ -n '$(URL)' ]; then \
-	  open -na '$(APP_BUNDLE)' --args '$(URL)'; \
+	@if [ ! -d '$(APP_BUNDLE)' ]; then bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS); fi
+	@if [ -n '$(BROWSER_URL)' ]; then \
+	  open -na '$(APP_BUNDLE)' --env KIMINI_BROWSER_URL='$(BROWSER_URL)'; \
 	else \
 	  open '$(APP_BUNDLE)'; \
+	fi
+
+open-web-app: ## Open Kimini Web.app (builds if missing)
+	@test "$$(uname -s)" = "Darwin" || { echo "error: open-app requires macOS"; exit 1; }
+	@if [ ! -d '$(WEB_APP_BUNDLE)' ]; then bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS); fi
+	@if [ -n '$(URL)' ]; then \
+	  open -na '$(WEB_APP_BUNDLE)' --args '$(URL)'; \
+	else \
+	  open '$(WEB_APP_BUNDLE)'; \
 	fi
 
 # ---------------------------------------------------------------------------
@@ -152,22 +197,38 @@ open-app: ## Open the packaged app (builds if missing); pass URL='…' on first 
 # ---------------------------------------------------------------------------
 ##@ Run
 
-run: ## Run debug build; pass URL='…' on first auth
-	$(CARGO) run -- $(URL)
+run: ## Run the native app
+	@if [ -n '$(BROWSER_URL)' ]; then \
+	  KIMINI_BROWSER_URL='$(BROWSER_URL)' $(CARGO) run --bin $(BIN) --no-default-features --features native; \
+	else \
+	  $(CARGO) run --bin $(BIN) --no-default-features --features native; \
+	fi
 
-run-release: release ## Run release binary; pass URL='…' on first auth
-	./$(REL_BIN) $(URL)
+run-web: ## Run Kimini Web; pass URL='…' on first auth
+	$(CARGO) run --bin $(WEB_BIN) --no-default-features --features legacy-web -- $(URL)
+
+run-release: release ## Run the native release binary
+	@if [ -n '$(BROWSER_URL)' ]; then \
+	  KIMINI_BROWSER_URL='$(BROWSER_URL)' ./$(REL_BIN); \
+	else \
+	  ./$(REL_BIN); \
+	fi
 
 # ---------------------------------------------------------------------------
 # Quality
 # ---------------------------------------------------------------------------
 ##@ Quality
 
-check: ## Type-check without producing binaries
-	$(CARGO) check
+check: ## Type-check both applications
+	$(CARGO) check --all-targets --all-features
 
 test: ## Run tests
-	$(CARGO) test
+	$(CARGO) test --all-targets --all-features
+
+coverage-core: ## Enforce 90% line coverage for protocol and state logic
+	$(CARGO) llvm-cov --all-features --all-targets --summary-only \
+	  --ignore-filename-regex 'src/(api|bin|daemon|legacy_web|native)/|src/i18n\.rs' \
+	  --fail-under-lines 90
 
 fmt: ## Format sources with rustfmt
 	$(CARGO) fmt
@@ -176,7 +237,7 @@ fmt-check: ## Check formatting (no write)
 	$(CARGO) fmt -- --check
 
 clippy: ## Lint with clippy (deny warnings)
-	$(CARGO) clippy --all-targets -- -D warnings
+	$(CARGO) clippy --all-targets --all-features -- -D warnings
 
 lint: fmt-check clippy ## Format check + clippy
 

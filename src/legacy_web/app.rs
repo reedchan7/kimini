@@ -1,4 +1,4 @@
-//! Kimini — the lightest way to browse.
+//! Legacy Kimi Code Web shell.
 //!
 //! Single-site shell for Kimi Code Web: one window, one system WebView,
 //! loopback-only navigation. Rendering, GPU compositing, fonts and IME are
@@ -7,9 +7,6 @@
 //! Launched with no URL, it discovers (or starts) the local kimi daemon and
 //! connects with the persisted token — zero configuration (see `daemon`).
 
-mod daemon;
-mod i18n;
-
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::rc::Rc;
@@ -17,12 +14,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tao::event::{Event, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
-use tao::window::{Window, WindowBuilder, WindowId};
-use url::Url;
-use wry::{NewWindowResponse, WebView, WebViewBuilder};
+use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use tao::window::{WindowBuilder, WindowId};
+use wry::{NewWindowResponse, WebViewBuilder};
 
-use i18n::{Lang, Strings, launch_html, settings_html};
+use crate::daemon;
+use crate::i18n::{self, Lang};
+
+use super::navigation::{explicit_url, is_loopback, origin_for_log};
+use super::pages::launch_html;
+#[cfg(target_os = "macos")]
+use super::{menu, settings};
 
 const APP_TITLE: &str = "Kimini";
 
@@ -32,7 +34,7 @@ const APP_TITLE: &str = "Kimini";
 #[cfg(target_os = "macos")]
 const DATA_STORE_ID: [u8; 16] = *b"kimini-data-v001";
 
-enum UserEvent {
+pub(super) enum UserEvent {
     SetTitle(String),
     /// Load a loopback URL in the main webview (discovery result or manual connect).
     Navigate(String),
@@ -49,39 +51,6 @@ enum UserEvent {
     PrefsMessage(String),
 }
 
-/// First CLI argument wins, then `$KIMINI_URL`. `None` means zero-config:
-/// discover (or start) the local kimi daemon and connect with its persisted
-/// token. An explicit URL skips discovery entirely — useful for a non-default
-/// `KIMI_CODE_HOME` or a port-forwarded daemon.
-fn explicit_url() -> Option<String> {
-    env::args()
-        .nth(1)
-        .or_else(|| env::var("KIMINI_URL").ok())
-        .filter(|u| !u.is_empty())
-}
-
-/// Only loopback origins may navigate inside the shell.
-fn is_loopback(raw: &str) -> bool {
-    let Ok(url) = Url::parse(raw) else {
-        return false;
-    };
-    if url.scheme() == "about" {
-        return true; // about:blank
-    }
-    if !matches!(url.scheme(), "http" | "https") {
-        return false;
-    }
-    match url.host() {
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        Some(url::Host::Domain(domain)) => {
-            domain.eq_ignore_ascii_case("localhost")
-                || domain.to_ascii_lowercase().ends_with(".localhost")
-        }
-        None => false,
-    }
-}
-
 /// External links are handed to the system browser; the shell never follows them.
 fn open_external(raw: &str) {
     #[cfg(target_os = "macos")]
@@ -95,141 +64,11 @@ fn open_external(raw: &str) {
     let _ = cmd;
 }
 
-/// macOS routes Cmd+C/V/A/Z through the main menu. Language lives under
-/// **Settings…** (not a top-level Language menu).
-#[cfg(target_os = "macos")]
-fn install_menu(t: &Strings) -> muda::Menu {
-    use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-
-    let menu = Menu::new();
-    let app = Submenu::with_id_and_items(
-        "app",
-        APP_TITLE,
-        true,
-        &[
-            &PredefinedMenuItem::about(Some(t.about), None),
-            &PredefinedMenuItem::separator(),
-            &MenuItem::with_id("settings", t.settings, true, "CmdOrCtrl+,".parse().ok()),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::hide(None),
-            &PredefinedMenuItem::hide_others(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::quit(None),
-        ],
-    );
-    let edit = Submenu::with_id_and_items(
-        "edit",
-        t.edit,
-        true,
-        &[
-            &PredefinedMenuItem::undo(None),
-            &PredefinedMenuItem::redo(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::cut(None),
-            &PredefinedMenuItem::copy(None),
-            &PredefinedMenuItem::paste(None),
-            &PredefinedMenuItem::select_all(None),
-        ],
-    );
-    let navigate = Submenu::with_id_and_items(
-        "navigate",
-        t.navigate,
-        true,
-        &[
-            &MenuItem::with_id("reload", t.reload, true, "CmdOrCtrl+R".parse().ok()),
-            &MenuItem::with_id("back", t.back, true, "CmdOrCtrl+[".parse().ok()),
-            &MenuItem::with_id("forward", t.forward, true, "CmdOrCtrl+]".parse().ok()),
-        ],
-    );
-    let window = Submenu::with_id_and_items(
-        "window",
-        t.window,
-        true,
-        &[
-            &PredefinedMenuItem::minimize(None),
-            &PredefinedMenuItem::close_window(None),
-        ],
-    );
-    for submenu in [app, edit, navigate, window] {
-        menu.append(&submenu.expect("valid menu item"))
-            .expect("append submenu");
-    }
-    menu.init_for_nsapp();
-    menu
-}
-
-#[cfg(target_os = "macos")]
-struct SettingsWindow {
-    window: Window,
-    webview: WebView,
-}
-
-#[cfg(target_os = "macos")]
-fn open_or_focus_settings(
-    event_loop: &tao::event_loop::EventLoopWindowTarget<UserEvent>,
-    proxy: &EventLoopProxy<UserEvent>,
-    lang: Lang,
-    slot: &RefCell<Option<SettingsWindow>>,
-) {
-    if let Some(existing) = slot.borrow().as_ref() {
-        existing.window.set_focus();
-        return;
-    }
-
-    let t = lang.strings();
-    let window = WindowBuilder::new()
-        .with_title(t.settings_title)
-        .with_inner_size(tao::dpi::LogicalSize::new(420.0, 280.0))
-        .with_resizable(false)
-        .build(event_loop)
-        .expect("create settings window");
-
-    let proxy = proxy.clone();
-    let html = settings_html(lang);
-    let webview = WebViewBuilder::new()
-        .with_html(&html)
-        .with_ipc_handler(move |req| {
-            let body = req.body().to_string();
-            let _ = proxy.send_event(UserEvent::PrefsMessage(body));
-        })
-        .build(&window)
-        .expect("create settings webview");
-
-    *slot.borrow_mut() = Some(SettingsWindow { window, webview });
-}
-
-#[cfg(target_os = "macos")]
-fn refresh_settings_ui(slot: &RefCell<Option<SettingsWindow>>, lang: Lang) {
-    let guard = slot.borrow();
-    let Some(settings) = guard.as_ref() else {
-        return;
-    };
-    let t = lang.strings();
-    settings.window.set_title(t.settings_title);
-    let _ = settings.webview.load_html(&settings_html(lang));
-}
-
-fn origin_of(raw: &str) -> String {
-    Url::parse(raw)
-        .ok()
-        .and_then(|u| {
-            u.host_str().map(|h| {
-                format!(
-                    "{}://{}:{}",
-                    u.scheme(),
-                    h,
-                    u.port_or_known_default().unwrap_or(0)
-                )
-            })
-        })
-        .unwrap_or_else(|| "<invalid url>".to_string())
-}
-
 fn apply_language(
     next: Lang,
     lang_cell: &Cell<Lang>,
     #[cfg(target_os = "macos")] menu_slot: &RefCell<Option<muda::Menu>>,
-    #[cfg(target_os = "macos")] settings_slot: &RefCell<Option<SettingsWindow>>,
+    #[cfg(target_os = "macos")] settings_slot: &RefCell<Option<settings::SettingsWindow>>,
 ) {
     if next == lang_cell.get() {
         return;
@@ -243,12 +82,12 @@ fn apply_language(
     #[cfg(target_os = "macos")]
     {
         *menu_slot.borrow_mut() = None;
-        *menu_slot.borrow_mut() = Some(install_menu(&next.strings()));
-        refresh_settings_ui(settings_slot, next);
+        *menu_slot.borrow_mut() = Some(menu::install(&next.strings()));
+        settings::refresh(settings_slot, next);
     }
 }
 
-fn main() -> wry::Result<()> {
+pub fn run() -> wry::Result<()> {
     let lang = Lang::resolve();
     let strings = lang.strings();
     eprintln!("kimini: lang={}", lang.code());
@@ -260,7 +99,7 @@ fn main() -> wry::Result<()> {
     let menu_slot: Rc<RefCell<Option<muda::Menu>>> = Rc::new(RefCell::new(None));
     #[cfg(target_os = "macos")]
     {
-        *menu_slot.borrow_mut() = Some(install_menu(&strings));
+        *menu_slot.borrow_mut() = Some(menu::install(&strings));
         let menu_proxy = proxy.clone();
         std::thread::spawn(move || {
             while let Ok(event) = muda::MenuEvent::receiver().recv() {
@@ -272,7 +111,7 @@ fn main() -> wry::Result<()> {
     let lang_cell = Rc::new(Cell::new(lang));
 
     #[cfg(target_os = "macos")]
-    let settings_slot: Rc<RefCell<Option<SettingsWindow>>> = Rc::new(RefCell::new(None));
+    let settings_slot: Rc<RefCell<Option<settings::SettingsWindow>>> = Rc::new(RefCell::new(None));
 
     let window = WindowBuilder::new()
         .with_title(APP_TITLE)
@@ -281,9 +120,11 @@ fn main() -> wry::Result<()> {
         .expect("create window");
     let main_id: WindowId = window.id();
 
-    let explicit = explicit_url();
+    let arg = env::args().nth(1);
+    let env_url = env::var("KIMINI_URL").ok();
+    let explicit = explicit_url(arg.as_deref(), env_url.as_deref());
     match &explicit {
-        Some(url) => eprintln!("kimini: loading {}", origin_of(url)),
+        Some(url) => eprintln!("kimini: loading {}", origin_for_log(url)),
         None => eprintln!("kimini: no URL given — discovering the local kimi daemon"),
     }
 
@@ -379,7 +220,7 @@ fn main() -> wry::Result<()> {
                 discovery_stop.store(true, Ordering::Relaxed);
                 last_launch_status.set(None);
                 // Log the origin only — the token rides in the fragment.
-                eprintln!("kimini: loading {}", origin_of(&url));
+                eprintln!("kimini: loading {}", origin_for_log(&url));
                 if let Err(e) = webview.load_url(&url) {
                     eprintln!("kimini: failed to load URL: {e}");
                 }
@@ -423,7 +264,7 @@ fn main() -> wry::Result<()> {
                     let _ = webview.evaluate_script("history.forward()");
                 }
                 "settings" => {
-                    open_or_focus_settings(target, &proxy, lang_cell.get(), &settings_slot);
+                    settings::open_or_focus(target, &proxy, lang_cell.get(), &settings_slot);
                 }
                 _ => {}
             },

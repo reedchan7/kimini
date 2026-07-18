@@ -105,29 +105,36 @@ If you genuinely think a convention is harmful, surface it. Don't fork silently.
 "Tests pass" is wrong if any were skipped.
 Default to surfacing uncertainty, not hiding it.
 
-## Project: Kimini browser shell
+## Project: Kimini native GUI and Web compatibility app
 
-Single-site Rust 2024 shell for Kimi Code Web: `wry` (system WebView) + `tao`
-(window/event loop) + `muda` (macOS menu; tao 0.34 has no menu module).
+Rust Edition 2024 workspace that ships two independent macOS applications:
 
-- Build: `cargo build` / `cargo build --release`
-- macOS app: `make app` → `dist/Kimini.app`; `make install-app` → `~/Applications`
-  (DMG/zip: `make dmg` / `make zip`; both arches: `make package-all`)
-- Release (preferred): bump `Cargo.toml` version → `make publish-release`
-  (local dual-arch package + `gh release create` tag `v*`). Dry-run:
-  `make publish-release PUBLISH_FLAGS=--dry-run`
-- CI/Release Actions: **manual only** (`workflow_dispatch` on `ci.yml` /
-  `release.yml`) — cloud fallback when Actions minutes are available
-- Run: `./target/debug/kimini` — zero-config: discovers the local kimi daemon
-  via `~/.kimi-code/server/lock` + `server.token` (healthz-probed), starting it
-  with `kimi server run` when absent (`src/daemon.rs`). An explicit URL arg /
-  `$KIMINI_URL` skips discovery.
-- Host UI i18n: `src/i18n.rs` (en/zh); Settings… (`Cmd+,`) for language;
-  resolve: `$KIMINI_LANG` → pref file → system → en
-- Keep `wry 0.55` + `tao 0.34` pinned together — winit 0.30 SIGSEGVs on
-  macOS 26, and tao/wry raw-window-handle versions must match.
-- Memory claims must cover all processes: Rust host + WebKit WebContent/GPU/
-  Networking (measurement protocol lives outside this repo under
-  `~/Pictures/assets/projects/kimini/docs-zh/` if needed).
-- Product docs (README, AGENTS, brand notes) stay **English only**. UI Chinese
-  lives only in `src/i18n.rs` (`Strings::zh`).
+- `Kimini.app` / `kimini`: GPUI-native Kimi Code client.
+- `Kimini Web.app` / `kimini-web`: WRY + tao + muda compatibility client.
+
+Both applications share daemon discovery and session data. Native code consumes
+the Kimi daemon's typed `/api/v1` REST and WebSocket contracts directly.
+
+- Build native: `make build`; run: `make run`; package: `make app`.
+- Build Web: `make build-web`; run: `make run-web`; package: `make app-web`.
+- Build both bundles: `make apps`; both architectures and formats:
+  `make package-all`.
+- Release (preferred): bump `Cargo.toml` version, then `make publish-release`.
+  Dry run: `make publish-release PUBLISH_FLAGS=--dry-run`.
+- CI and release Actions remain manual (`workflow_dispatch`).
+- Native startup discovers `~/.kimi-code/server/lock` plus `server.token`,
+  health-probes the daemon, and starts `kimi server run` when absent.
+- Native modules stay directional: `daemon` and `api` feed `protocol` and the
+  pure `model`; `native` renders projected state; `legacy_web` remains isolated.
+- The native browser child view is on demand. It is for human preview and OAuth;
+  future agent browsing belongs in an isolated Chromium broker.
+- GPUI and gpui-component use the revisions recorded in `Cargo.lock`. Update
+  them together and retain AccessKit coverage.
+- Keep `wry 0.55` and `tao 0.34` paired for the Web app because their raw-window
+  handle versions must match.
+- Coverage policy: protocol and pure state logic stay at or above 90% line
+  coverage. GUI/platform glue requires real-window and packaged-app scenarios.
+- Resource claims cover the complete process family. Browser-off, browser-on,
+  after-browser-close, and Web compatibility measurements are distinct.
+- Product documentation stays English-only. Chinese UI text lives only in
+  `src/i18n.rs`.

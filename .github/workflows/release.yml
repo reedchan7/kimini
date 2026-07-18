@@ -87,17 +87,25 @@ jobs:
           key: release-${{ matrix.target }}
           shared-key: release
 
-      - name: Build + package DMG & zip
+      - name: Build + package both apps
         env:
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
-          ./scripts/package-macos.sh \
+          bash ./scripts/package-macos.sh \
+            --app native \
+            --target ${{ matrix.target }} \
+            --arch ${{ matrix.arch }} \
+            --dmg \
+            --zip
+          bash ./scripts/package-macos.sh \
+            --app web \
             --target ${{ matrix.target }} \
             --arch ${{ matrix.arch }} \
             --dmg \
             --zip
           ls -lh dist/
           file "dist/Kimini.app/Contents/MacOS/kimini"
+          file "dist/Kimini Web.app/Contents/MacOS/kimini-web"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -143,27 +151,25 @@ jobs:
             ## Install (macOS)
 
             1. Download the build that matches your Mac:
-               - **Apple Silicon** (M1/M2/M3/M4…): `Kimini-*-macos-aarch64.dmg` or `.zip`
-               - **Intel**: `Kimini-*-macos-x86_64.dmg` or `.zip`
-            2. Open the **DMG** and drag **Kimini** into Applications  
-               (or unzip the archive and move `Kimini.app` yourself).
+               - **Native:** `Kimini-<version>-macos-<arch>.dmg` or `.zip`
+               - **Web fallback:** `Kimini-Web-<version>-macos-<arch>.dmg` or `.zip`
+            2. Open the **DMG** and drag the selected app into Applications.
             3. First launch may need **right-click → Open** (ad-hoc signed; not notarized yet).
-            4. Start the Kimi daemon (`kimi web`), then on **first run only**:
+            4. Both apps discover and start the local Kimi daemon automatically.
+               Kimini Web also accepts an explicit local URL:
 
             ```sh
-            open -na Kimini --args 'http://127.0.0.1:58627/#token=<daemon-token>'
+            open -na 'Kimini Web' --args 'http://127.0.0.1:58627/#token=<daemon-token>'
             ```
 
-            Later launches: Dock / Spotlight / `open -a Kimini`.
+            The two apps can be installed and run side by side.
 
             ## Assets
 
             | File | Contents |
             |------|----------|
-            | `*-macos-aarch64.dmg` | Apple Silicon installer image |
-            | `*-macos-aarch64.zip` | Apple Silicon `Kimini.app` |
-            | `*-macos-x86_64.dmg` | Intel installer image |
-            | `*-macos-x86_64.zip` | Intel `Kimini.app` |
+            | `Kimini-*` | Native GPUI application |
+            | `Kimini-Web-*` | Kimi Code Web compatibility application |
 
             Requires **macOS 14+**.
           files: |

@@ -10,7 +10,6 @@ cd "$ROOT"
 
 PACKAGE_SH="$ROOT/scripts/package-macos.sh"
 DIST="${DIST:-$ROOT/dist}"
-APP_NAME="Kimini"
 
 SKIP_BUILD=0
 DRY_RUN=0
@@ -108,10 +107,14 @@ if [[ -z "$TITLE" ]]; then
 fi
 
 ARTIFACTS=(
-  "${DIST}/${APP_NAME}-${VERSION}-macos-aarch64.dmg"
-  "${DIST}/${APP_NAME}-${VERSION}-macos-aarch64.zip"
-  "${DIST}/${APP_NAME}-${VERSION}-macos-x86_64.dmg"
-  "${DIST}/${APP_NAME}-${VERSION}-macos-x86_64.zip"
+  "${DIST}/Kimini-${VERSION}-macos-aarch64.dmg"
+  "${DIST}/Kimini-${VERSION}-macos-aarch64.zip"
+  "${DIST}/Kimini-Web-${VERSION}-macos-aarch64.dmg"
+  "${DIST}/Kimini-Web-${VERSION}-macos-aarch64.zip"
+  "${DIST}/Kimini-${VERSION}-macos-x86_64.dmg"
+  "${DIST}/Kimini-${VERSION}-macos-x86_64.zip"
+  "${DIST}/Kimini-Web-${VERSION}-macos-x86_64.dmg"
+  "${DIST}/Kimini-Web-${VERSION}-macos-x86_64.zip"
 )
 
 echo "==> version ${VERSION}  tag ${TAG}"
@@ -134,9 +137,11 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
   if command -v rustup >/dev/null 2>&1; then
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
   fi
-  echo "==> package aarch64 + x86_64 (DMG + zip)"
-  "$PACKAGE_SH" --target aarch64-apple-darwin --arch aarch64 --dmg --zip
-  "$PACKAGE_SH" --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+  echo "==> package both apps for aarch64 + x86_64 (DMG + zip)"
+  for app in native web; do
+    bash "$PACKAGE_SH" --app "$app" --target aarch64-apple-darwin --arch aarch64 --dmg --zip
+    bash "$PACKAGE_SH" --app "$app" --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+  done
 else
   echo "==> skip build; expecting existing artifacts in ${DIST}"
 fi
@@ -191,7 +196,7 @@ if [[ "$NO_GIT_TAG" -eq 0 ]]; then
   # Push tag if remote is missing it (best-effort detect origin).
   remote="$(git remote 2>/dev/null | awk 'NR==1{print; exit}')"
   remote="${remote:-origin}"
-  if git ls-remote --tags "$remote" "refs/tags/${TAG}" 2>/dev/null | grep -q .; then
+  if git ls-remote --tags "$remote" "refs/tags/${TAG}" 2>/dev/null | rg -q .; then
     echo "==> remote ${remote} already has ${TAG}"
   else
     echo "==> git push ${remote} ${TAG}"

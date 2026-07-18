@@ -2,22 +2,45 @@
 name = "kimini"
 version = "0.1.0"
 edition = "2024"
-description = "The lightest way to browse. Single-site shell for Kimi Code Web."
+description = "Native Kimi Code GUI with a separate Web compatibility app."
 license = "MIT"
 publish = false
+default-run = "kimini"
+
+[features]
+default = ["native"]
+native = ["dep:async-channel", "dep:gpui", "dep:gpui-component", "dep:gpui-platform", "dep:tungstenite", "dep:ureq", "dep:wry"]
+legacy-web = ["dep:tao", "dep:wry", "dep:muda"]
 
 [dependencies]
-tao = "0.34"
-wry = "0.55"
+async-channel = { version = "2", optional = true }
+gpui = { git = "https://github.com/zed-industries/zed", optional = true }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", optional = true }
+gpui-platform = { package = "gpui_platform", git = "https://github.com/zed-industries/zed", features = ["font-kit", "runtime_shaders"], optional = true }
+tao = { version = "0.34", optional = true }
+wry = { version = "0.55", optional = true }
 url = "2"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+ureq = { version = "2.12", default-features = false, features = ["json"], optional = true }
+tungstenite = { version = "0.28", default-features = false, features = ["handshake"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-muda = { version = "0.19", default-features = false }
+muda = { version = "0.19", default-features = false, optional = true }
+
+[[bin]]
+name = "kimini"
+path = "src/bin/kimini.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "kimini-web"
+path = "src/bin/kimini-web.rs"
+required-features = ["legacy-web"]
 
 [profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
+opt-level = 3
+lto = "thin"
+codegen-units = 16
 strip = true
 panic = "abort"

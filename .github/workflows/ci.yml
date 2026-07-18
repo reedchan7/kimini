@@ -44,17 +44,43 @@ jobs:
 
       - name: clippy
         if: matrix.arch == 'aarch64'
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: build release
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: test
+        if: matrix.arch == 'aarch64'
+        run: cargo test --all-targets --all-features
 
-      - name: package app (smoke)
+      - name: Install cargo-llvm-cov
+        if: matrix.arch == 'aarch64'
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: core coverage
+        if: matrix.arch == 'aarch64'
+        run: make coverage-core
+
+      - name: build release apps
         run: |
-          ./scripts/package-macos.sh \
+          cargo build --release --bin kimini \
+            --no-default-features --features native \
+            --target ${{ matrix.target }}
+          cargo build --release --bin kimini-web \
+            --no-default-features --features legacy-web \
+            --target ${{ matrix.target }}
+
+      - name: package apps (smoke)
+        run: |
+          bash ./scripts/package-macos.sh \
+            --app native \
+            --skip-build \
+            --target ${{ matrix.target }} \
+            --arch ${{ matrix.arch }} \
+            --zip
+          bash ./scripts/package-macos.sh \
+            --app web \
             --skip-build \
             --target ${{ matrix.target }} \
             --arch ${{ matrix.arch }} \
             --zip
           ls -lh dist/
           file "dist/Kimini.app/Contents/MacOS/kimini"
+          file "dist/Kimini Web.app/Contents/MacOS/kimini-web"

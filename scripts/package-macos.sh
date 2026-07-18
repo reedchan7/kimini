@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a signed-ad-hoc Kimini.app (and optional DMG / zip) for macOS.
+# Build one signed-ad-hoc Kimini app (and optional DMG / zip) for macOS.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,14 +10,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
-BIN_NAME="kimini"
-APP_NAME="Kimini"
-BUNDLE_ID="app.kimini"
+APP_KIND="native"
 DIST="${DIST:-$ROOT/dist}"
-APP_DIR="$DIST/${APP_NAME}.app"
-CONTENTS="$APP_DIR/Contents"
-MACOS_DIR="$CONTENTS/MacOS"
-RES_DIR="$CONTENTS/Resources"
 ICON_SRC="${ICON_SRC:-$ROOT/docs/brand/exports/app-icon-1024.png}"
 PLIST_SRC="$ROOT/packaging/macos/Info.plist"
 ICNS_CACHE="$ROOT/packaging/macos/AppIcon.icns"
@@ -36,6 +30,7 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
+  --app KIND         native (Kimini) or web (Kimini Web); default: native
   --dmg              Create a compressed DMG in dist/
   --zip              Create a .app zip archive in dist/
   --skip-build       Reuse an existing release binary
@@ -54,6 +49,14 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app)
+      APP_KIND="${2:-}"
+      if [[ -z "$APP_KIND" ]]; then
+        echo "error: --app requires native or web" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
     --dmg) MAKE_DMG=1; shift ;;
     --zip) MAKE_ZIP=1; shift ;;
     --skip-build) SKIP_BUILD=1; shift ;;
@@ -87,10 +90,6 @@ while [[ $# -gt 0 ]]; do
         echo "error: --dist requires a directory" >&2
         exit 1
       fi
-      APP_DIR="$DIST/${APP_NAME}.app"
-      CONTENTS="$APP_DIR/Contents"
-      MACOS_DIR="$CONTENTS/MacOS"
-      RES_DIR="$CONTENTS/Resources"
       shift 2
       ;;
     -h|--help) usage; exit 0 ;;
@@ -101,6 +100,32 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "$APP_KIND" in
+  native)
+    BIN_NAME="kimini"
+    APP_NAME="Kimini"
+    ARTIFACT_NAME="Kimini"
+    BUNDLE_ID="app.kimini"
+    CARGO_FEATURE="native"
+    ;;
+  web)
+    BIN_NAME="kimini-web"
+    APP_NAME="Kimini Web"
+    ARTIFACT_NAME="Kimini-Web"
+    BUNDLE_ID="app.kimini.web"
+    CARGO_FEATURE="legacy-web"
+    ;;
+  *)
+    echo "error: unknown app kind: $APP_KIND (expected native or web)" >&2
+    exit 1
+    ;;
+esac
+
+APP_DIR="$DIST/${APP_NAME}.app"
+CONTENTS="$APP_DIR/Contents"
+MACOS_DIR="$CONTENTS/MacOS"
+RES_DIR="$CONTENTS/Resources"
 
 if [[ -n "${VERSION:-}" ]]; then
   :
@@ -166,15 +191,15 @@ generate_icns() {
 
   local -a pairs=(
     "16:icon_16x16.png"
-    "32:diana.s@example.org"
+    "32:icon_16x16@2x.png"
     "32:icon_32x32.png"
-    "64:ivan.p@example.net"
+    "64:icon_32x32@2x.png"
     "128:icon_128x128.png"
-    "256:wendy.h@example.net"
+    "256:icon_128x128@2x.png"
     "256:icon_256x256.png"
-    "512:wendy.h@example.net"
+    "512:icon_256x256@2x.png"
     "512:icon_512x512.png"
-    "1024:walt.e@example.net"
+    "1024:icon_512x512@2x.png"
   )
 
   local pair size name
@@ -199,14 +224,16 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
     export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
   fi
   if [[ -n "$TARGET" ]]; then
-    echo "==> cargo build --release --target $TARGET"
+    echo "==> cargo build --release --bin $BIN_NAME --target $TARGET"
     if command -v rustup >/dev/null 2>&1; then
       rustup target add "$TARGET"
     fi
-    cargo build --release --target "$TARGET"
+    cargo build --release --bin "$BIN_NAME" --no-default-features \
+      --features "$CARGO_FEATURE" --target "$TARGET"
   else
-    echo "==> cargo build --release"
-    cargo build --release
+    echo "==> cargo build --release --bin $BIN_NAME"
+    cargo build --release --bin "$BIN_NAME" --no-default-features \
+      --features "$CARGO_FEATURE"
   fi
 elif [[ ! -x "$REL_BIN" ]]; then
   echo "error: --skip-build set but $REL_BIN is missing" >&2
@@ -226,7 +253,7 @@ if [[ "$ARCH_LABEL" == "unknown" ]]; then
   exit 1
 fi
 
-ARTIFACT_STEM="${APP_NAME}-${VERSION}-macos-${ARCH_LABEL}"
+ARTIFACT_STEM="${ARTIFACT_NAME}-${VERSION}-macos-${ARCH_LABEL}"
 
 # ---------------------------------------------------------------------------
 # 2. AppIcon.icns (regenerate when source is newer)
@@ -254,7 +281,12 @@ cp "$REL_BIN" "$MACOS_DIR/$BIN_NAME"
 chmod 755 "$MACOS_DIR/$BIN_NAME"
 cp "$ICNS_CACHE" "$RES_DIR/AppIcon.icns"
 
-sed "s/@VERSION@/${VERSION}/g" "$PLIST_SRC" > "$CONTENTS/Info.plist"
+sed \
+  -e "s/@VERSION@/${VERSION}/g" \
+  -e "s/@APP_NAME@/${APP_NAME}/g" \
+  -e "s/@BIN_NAME@/${BIN_NAME}/g" \
+  -e "s/@BUNDLE_ID@/${BUNDLE_ID}/g" \
+  "$PLIST_SRC" > "$CONTENTS/Info.plist"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
 
 # ---------------------------------------------------------------------------
@@ -319,11 +351,15 @@ if [[ -n "$INSTALL_DIR" ]]; then
   echo "    installed"
   echo
   echo "Launch:  open -a ${APP_NAME}"
-  echo "First auth (if needed):"
-  echo "  open -na ${APP_NAME} --args 'http://127.0.0.1:58627/#token=<daemon-token>'"
+  if [[ "$APP_KIND" == "web" ]]; then
+    echo "First auth (if needed):"
+    echo "  open -na '${APP_NAME}' --args 'http://127.0.0.1:58627/#token=<daemon-token>'"
+  fi
 fi
 
 echo
 echo "Done. Bundle: $APP_DIR"
 echo "Run:  open '$APP_DIR'"
-echo "  or: open -na ${APP_NAME} --args 'http://127.0.0.1:58627/#token=…'"
+if [[ "$APP_KIND" == "web" ]]; then
+  echo "  or: open -na '${APP_NAME}' --args 'http://127.0.0.1:58627/#token=…'"
+fi
