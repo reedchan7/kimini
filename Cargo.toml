@@ -1,6 +1,6 @@
 [package]
 name = "kimini"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Native Kimi Code GUI with a separate Web compatibility app."
 license = "MIT"
