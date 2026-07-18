@@ -45,9 +45,12 @@ ARCH      ?=
 PUBLISH_FLAGS ?=
 
 .PHONY: help build build-web release release-web run run-web run-release \
-        check test coverage-core fmt fmt-check clippy lint clean clean-dist size install doctor \
+        check test coverage-core fmt fmt-check clippy lint clean clean-dist size \
+        install uninstall doctor \
         app app-native app-web apps dmg dmg-web zip zip-web package-all \
-        publish-release install-app install-web-app open-app open-web-app
+        publish-release install-app install-web-app \
+        uninstall-app uninstall-web-app uninstall-all \
+        open-app open-web-app
 
 # ---------------------------------------------------------------------------
 # Help (default)
@@ -174,6 +177,24 @@ install-web-app: ## Package and install Kimini Web.app
 	@test "$$(uname -s)" = "Darwin" || { echo "error: install-app requires macOS"; exit 1; }
 	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
 
+uninstall-app: ## Remove Kimini.app from INSTALL_DIR (default: ~/Applications)
+	@if [ -d "$(INSTALL_DIR)/$(APP_NAME).app" ]; then \
+	  rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"; \
+	  printf 'removed %s\n' "$(INSTALL_DIR)/$(APP_NAME).app"; \
+	else \
+	  printf 'not installed: %s\n' "$(INSTALL_DIR)/$(APP_NAME).app"; \
+	fi
+
+uninstall-web-app: ## Remove Kimini Web.app from INSTALL_DIR
+	@if [ -d "$(INSTALL_DIR)/$(WEB_APP_NAME).app" ]; then \
+	  rm -rf "$(INSTALL_DIR)/$(WEB_APP_NAME).app"; \
+	  printf 'removed %s\n' "$(INSTALL_DIR)/$(WEB_APP_NAME).app"; \
+	else \
+	  printf 'not installed: %s\n' "$(INSTALL_DIR)/$(WEB_APP_NAME).app"; \
+	fi
+
+uninstall-all: uninstall uninstall-app uninstall-web-app ## Remove CLI + both apps from install locations
+
 open-app: ## Open native packaged app; BROWSER_URL='…' opens the browser pane
 	@test "$$(uname -s)" = "Darwin" || { echo "error: open-app requires macOS"; exit 1; }
 	@if [ ! -d '$(APP_BUNDLE)' ]; then bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS); fi
@@ -273,6 +294,13 @@ size: ## Print debug/release binary and .app sizes (if present)
 
 install: release ## Install release binary to ~/.cargo/bin
 	$(CARGO) install --path . --force
+
+uninstall: ## Remove cargo-installed kimini binaries from ~/.cargo/bin
+	@if $(CARGO) uninstall kimini >/dev/null 2>&1; then \
+	  printf 'removed cargo package kimini (~/.cargo/bin)\n'; \
+	else \
+	  printf 'not installed: kimini (cargo)\n'; \
+	fi
 
 doctor: ## Show toolchain / pinned dep versions
 	@printf '$(C_BOLD)Environment$(C_RESET)\n'
