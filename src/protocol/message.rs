@@ -16,7 +16,70 @@ pub enum MessageContent {
     Thinking(ThinkingContent),
     ToolUse(ToolUseContent),
     ToolResult(ToolResultContent),
+    Image(ImageContent),
+    Video(VideoContent),
+    File(FileContent),
     Other(serde_json::Value),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageContent {
+    #[serde(rename = "type")]
+    kind: ImageKind,
+    pub source: MediaSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum ImageKind {
+    #[serde(rename = "image")]
+    Image,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VideoContent {
+    #[serde(rename = "type")]
+    kind: VideoKind,
+    pub source: MediaSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum VideoKind {
+    #[serde(rename = "video")]
+    Video,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum MediaSource {
+    Url { url: String },
+    Base64 { media_type: String, data: String },
+    File { file_id: String },
+}
+
+impl MediaSource {
+    pub fn display_reference(&self) -> String {
+        match self {
+            Self::Url { url } => url.clone(),
+            Self::Base64 { media_type, .. } => media_type.clone(),
+            Self::File { file_id } => file_id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FileContent {
+    #[serde(rename = "type")]
+    kind: FileKind,
+    pub file_id: String,
+    pub name: String,
+    pub media_type: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum FileKind {
+    #[serde(rename = "file")]
+    File,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

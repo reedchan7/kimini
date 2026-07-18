@@ -25,15 +25,15 @@ by side:
 
 Both applications discover the same local Kimi daemon and use the same session
 data. The native client talks directly to the daemon's typed REST and WebSocket
-contracts; it does not wrap Kimi Code Web or parse terminal output.
+contracts; it does not wrap Kimi Code Web or scrape CLI/TUI output.
 
 > [!IMPORTANT]
-> The native application is at the G0 engineering checkpoint. Session loading,
-> virtualized conversation rendering, streaming, prompt submission, stop,
-> approvals, single-choice questions, authoritative snapshot recovery,
-> accessibility semantics, and an on-demand WRY child browser are implemented.
-> Kimini Web remains the complete product surface while native parity is built
-> in stages.
+> The native application is a functional alpha. Its end-to-end G0 path and
+> selected G1/G2 product surfaces are implemented, including session lifecycle,
+> grouped tool traces, files, tasks, goals, skills, side chat, and daemon-backed
+> terminals. Formal long-session, packaged CJK, accessibility, and matched
+> performance acceptance remain open. Kimini Web stays available as the complete
+> compatibility surface throughout native parity work.
 
 ## Architecture
 
@@ -60,19 +60,29 @@ The source is split by responsibility:
 - `src/native/` — GPUI composition, presentation cache, views, and browser host.
 - `src/legacy_web/` — isolated Kimini Web compatibility application.
 
-## Native G0
+## Native alpha
 
 The current native path includes:
 
 - zero-configuration local daemon discovery and startup;
 - typed session list, snapshot, prompt, abort, approval, and question requests;
+- paginated session search plus create, rename, archive, restore, fork, compact,
+  undo, and diagnostic export flows;
 - sequence/epoch cursor handling, duplicate suppression, and authoritative
   snapshot reload after cursor gaps or socket closure;
 - UTF-16 stream offsets, step-relative stream resets, subagent isolation, and
   unknown-event tolerance;
 - bounded lossless event delivery from a dedicated WebSocket worker;
 - variable-height conversation virtualization and cached transcript projection;
-- native composer, streaming assistant output, pending approvals, and questions;
+- native composer with attachments, slash commands, skills, queued prompts,
+  steering, runtime modes, goals, streaming output, approvals, and multi-part
+  questions;
+- compact grouped tool traces and a dedicated thinking-preview pane modeled on
+  the Kimi Code Web information hierarchy;
+- workspace file browsing, search, previews, git state, and diff summaries;
+- background task/subagent rosters, isolated BTW side chats, and daemon-backed
+  terminal tabs with VT output, replay, resize, command input, and close;
+- managed authentication state and English/Simplified Chinese host UI;
 - AccessKit roles, labels, focus traversal, and native CJK input plumbing;
 - a rectangular WRY child view that is created only after an explicit browser
   action and destroyed when closed.

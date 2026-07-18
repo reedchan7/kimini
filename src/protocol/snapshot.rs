@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ApprovalRequest, MessagePage, QuestionRequest, Session, SessionCursor};
+use super::{ApprovalRequest, MessagePage, QuestionRequest, Session, SessionCursor, Task};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
@@ -9,6 +9,8 @@ pub struct SessionSnapshot {
     pub session: Session,
     pub messages: MessagePage,
     pub in_flight_turn: Option<InFlightTurn>,
+    #[serde(default)]
+    pub subagents: Vec<Task>,
     #[serde(default)]
     pub pending_approvals: Vec<ApprovalRequest>,
     #[serde(default)]

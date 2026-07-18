@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-use crate::protocol::{ApprovalRequest, Message, QuestionRequest, WireEvent};
+use crate::protocol::{ApprovalRequest, GoalSnapshot, Message, QuestionRequest, WireEvent};
 
 use super::AppModel;
 
@@ -110,6 +110,16 @@ impl AppModel {
             }
             "event.session.work_changed" => {
                 update_session_work(&mut self.sessions, session_id, &event.payload);
+            }
+            "goal.updated" | "event.goal.updated" => {
+                conversation.goal = event
+                    .payload
+                    .get("snapshot")
+                    .filter(|snapshot| !snapshot.is_null())
+                    .and_then(|snapshot| {
+                        serde_json::from_value::<GoalSnapshot>(snapshot.clone()).ok()
+                    })
+                    .filter(|goal| !goal.is_complete());
             }
             _ => {}
         }

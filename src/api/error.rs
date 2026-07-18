@@ -2,6 +2,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum ApiError {
+    LocalFile(String),
     Transport(String),
     InvalidResponse(String),
     Daemon { code: i64, message: String },
@@ -11,6 +12,7 @@ pub enum ApiError {
 impl fmt::Display for ApiError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::LocalFile(message) => write!(formatter, "Local file error: {message}"),
             Self::Transport(message) => {
                 write!(formatter, "Kimi daemon connection failed: {message}")
             }

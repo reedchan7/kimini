@@ -3,6 +3,7 @@ use gpui_component::input::{Input, InputContentType};
 
 use super::super::app::Shell;
 use super::super::theme::*;
+use super::accessible_input::accessible_input;
 
 impl Shell {
     pub(super) fn browser_surface(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -10,7 +11,7 @@ impl Shell {
         div()
             .id("browser-surface")
             .role(Role::Group)
-            .aria_label("Human browser")
+            .aria_label(self.strings.native.browser)
             .flex_1()
             .min_w_0()
             .h_full()
@@ -28,20 +29,28 @@ impl Shell {
                     .border_color(rgb(BORDER))
                     .bg(rgb(SURFACE))
                     .child(
-                        browser_button("Back", "browser-back")
+                        browser_button(self.strings.back, "browser-back")
                             .on_click(cx.listener(|this, _, _, cx| this.browser_back(cx))),
                     )
                     .child(
-                        div().flex_1().min_w_0().child(
-                            Input::new(&self.browser_address)
-                                .role(Role::UrlInput)
-                                .content_type(InputContentType::Url)
-                                .h(px(32.0)),
-                        ),
+                        accessible_input(
+                            "browser-address-input",
+                            &self.browser_address,
+                            Role::UrlInput,
+                            self.strings.native.browser_address,
+                            self.strings.native.browser_address,
+                            Input::new(&self.browser_address).content_type(InputContentType::Url),
+                            cx,
+                        )
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(32.0)),
                     )
                     .child(
-                        browser_button("Close", "browser-close")
-                            .on_click(cx.listener(|this, _, _, cx| this.close_browser(cx))),
+                        browser_button(self.strings.native.close_browser, "browser-close")
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.close_browser(window, cx)),
+                            ),
                     ),
             )
             .when_some(self.browser_error.clone(), |surface, error| {
@@ -62,7 +71,7 @@ impl Shell {
                 div()
                     .id("browser-content")
                     .role(Role::WebView)
-                    .aria_label("Browser content")
+                    .aria_label(self.strings.native.browser_content)
                     .flex_1()
                     .min_h_0()
                     .when_some(content, |container, browser| container.child(browser)),

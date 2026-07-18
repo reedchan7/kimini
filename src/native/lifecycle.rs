@@ -4,17 +4,22 @@ use gpui::{AppContext, Context};
 
 use crate::api::{EventSocket, KimiClient, SocketEvent};
 use crate::model::ApplyOutcome;
-use crate::protocol::SessionSnapshot;
 
-use super::app::{LoadState, Shell};
-use super::bootstrap::{self, Bootstrap};
+use super::app::{LoadState, Shell, UtilityPanel};
+use super::bootstrap::{self, Bootstrap, LoadedSession};
 
 impl Shell {
     pub(super) fn start_bootstrap(&mut self, cx: &mut Context<Self>) {
+        self.bootstrap_generation = self.bootstrap_generation.wrapping_add(1);
+        let generation = self.bootstrap_generation;
         let task = cx.background_spawn(async { bootstrap::load() });
         cx.spawn(async move |this, cx| {
             let result = task.await;
-            let _ = this.update(cx, |this, cx| this.finish_bootstrap(result, cx));
+            let _ = this.update(cx, |this, cx| {
+                if generation == this.bootstrap_generation {
+                    this.finish_bootstrap(result, cx);
+                }
+            });
         })
         .detach();
     }
@@ -24,9 +29,11 @@ impl Shell {
             Ok(bootstrap) => {
                 self.client = Some(KimiClient::new(bootstrap.connection.clone()));
                 self.connection = Some(bootstrap.connection);
-                self.model.replace_sessions(bootstrap.sessions);
-                if let Some(snapshot) = bootstrap.snapshot {
-                    self.install_snapshot(snapshot, cx);
+                self.model.replace_session_page(bootstrap.sessions);
+                self.models = bootstrap.models;
+                self.auth.summary = bootstrap.auth;
+                if let Some(active) = bootstrap.active {
+                    self.install_snapshot(active, cx);
                 }
                 self.state = LoadState::Ready;
             }
@@ -35,11 +42,38 @@ impl Shell {
         cx.notify();
     }
 
-    fn install_snapshot(&mut self, snapshot: SessionSnapshot, cx: &mut Context<Self>) {
-        let cursor = snapshot.cursor();
-        let session_id = snapshot.session.id.clone();
-        self.model.seed(snapshot);
+    fn install_snapshot(&mut self, loaded: LoadedSession, cx: &mut Context<Self>) {
+        self.history_loading = false;
+        let cursor = loaded.snapshot.cursor();
+        let session_id = loaded.snapshot.session.id.clone();
+        let snapshot_subagents = loaded.snapshot.subagents.clone();
+        self.model.seed(loaded.snapshot);
+        if let Some(status) = loaded.status {
+            self.model.set_runtime(&session_id, status);
+        }
+        self.model.set_goal(&session_id, loaded.goal);
+        if let Some(prompts) = loaded.prompts {
+            self.prompt_queues.replace(session_id.clone(), prompts);
+        }
+        self.tasks.install(
+            session_id.clone(),
+            snapshot_subagents,
+            loaded.tasks.map(|tasks| tasks.items).unwrap_or_default(),
+        );
+        if let Some(skills) = loaded.skills {
+            self.skills.begin_load(session_id.clone());
+            self.skills.install(&session_id, skills.skills);
+        }
         self.transcript.rebuild(&self.model);
+        if self.utility_panel == Some(UtilityPanel::Files) {
+            self.refresh_workspace_files(cx);
+        }
+        if self.utility_panel == Some(UtilityPanel::Skills) {
+            self.refresh_skills(cx);
+        }
+        if self.utility_panel == Some(UtilityPanel::Terminal) {
+            self.refresh_terminals(cx);
+        }
         if let Some(connection) = self.connection.clone() {
             let socket = EventSocket::connect(
                 connection,
@@ -74,16 +108,26 @@ impl Shell {
         match event {
             SocketEvent::Event(event) => {
                 let kind = event.kind.clone();
-                let snapshot_boundary = matches!(
-                    kind.as_str(),
-                    "turn.step.completed"
-                        | "event.turn.step.completed"
-                        | "turn.ended"
-                        | "event.turn.ended"
-                );
+                let side_chat_event = self.side_chats.owns_event(&event);
+                self.side_chats.apply_event(&event);
+                let task_changed = !side_chat_event && self.tasks.apply_event(&event);
+                let snapshot_boundary = !side_chat_event
+                    && matches!(
+                        kind.as_str(),
+                        "turn.step.completed"
+                            | "event.turn.step.completed"
+                            | "turn.ended"
+                            | "event.turn.ended"
+                            | "prompt.completed"
+                            | "event.prompt.completed"
+                            | "prompt.aborted"
+                            | "event.prompt.aborted"
+                            | "prompt.steered"
+                            | "event.prompt.steered"
+                    );
                 let outcome = self.model.apply(event);
                 reload = outcome == ApplyOutcome::ResyncRequired || snapshot_boundary;
-                if outcome == ApplyOutcome::Applied {
+                if outcome == ApplyOutcome::Applied && !side_chat_event {
                     match kind.as_str() {
                         "assistant.delta"
                         | "event.assistant.delta"
@@ -97,8 +141,19 @@ impl Shell {
                         _ => {}
                     }
                 }
+                if task_changed || (!side_chat_event && is_task_boundary(&kind)) {
+                    self.schedule_task_poll(cx);
+                }
             }
             SocketEvent::ResyncRequired { .. } => reload = true,
+            SocketEvent::TerminalOutput(output) => {
+                if self.terminals.apply_output(output) {
+                    self.terminal_scroll.scroll_to_bottom();
+                }
+            }
+            SocketEvent::TerminalExit(exit) => {
+                self.terminals.apply_exit(exit);
+            }
             SocketEvent::Error { message, fatal } => {
                 self.state = LoadState::Failed(message);
                 if fatal {
@@ -107,7 +162,7 @@ impl Shell {
                 }
             }
             SocketEvent::Closed => reload = true,
-            SocketEvent::Connected => {}
+            SocketEvent::Connected => self.attach_active_terminal(),
         }
         if reload {
             self.reload_active(cx);
@@ -115,11 +170,19 @@ impl Shell {
         cx.notify();
     }
 
-    pub(super) fn select_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+    pub(super) fn select_session(
+        &mut self,
+        session_id: String,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.renaming_session = false;
         self.load_snapshot(session_id, cx);
+        self.composer
+            .update(cx, |input, cx| input.focus(window, cx));
     }
 
-    fn reload_active(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::native) fn reload_active(&mut self, cx: &mut Context<Self>) {
         if let Some(session) = self.model.active_session() {
             self.load_snapshot(session.id.clone(), cx);
         }
@@ -130,9 +193,11 @@ impl Shell {
             return;
         };
         self.snapshot_generation = self.snapshot_generation.wrapping_add(1);
+        self.preview_thinking = None;
         let generation = self.snapshot_generation;
-        self.state = LoadState::Working("Loading conversation…".into());
-        let task = cx.background_spawn(async move { client.snapshot(&session_id) });
+        self.state = LoadState::Working(self.strings.native.working.into());
+        let task =
+            cx.background_spawn(async move { bootstrap::load_session(&client, &session_id) });
         cx.spawn(async move |this, cx| {
             let result = task.await.map_err(|error| error.to_string());
             let _ = this.update(cx, |this, cx| {
@@ -140,8 +205,8 @@ impl Shell {
                     return;
                 }
                 match result {
-                    Ok(snapshot) => {
-                        this.install_snapshot(snapshot, cx);
+                    Ok(loaded) => {
+                        this.install_snapshot(loaded, cx);
                         this.state = LoadState::Ready;
                     }
                     Err(error) => this.state = LoadState::Failed(error),
@@ -151,4 +216,19 @@ impl Shell {
         })
         .detach();
     }
+}
+
+fn is_task_boundary(kind: &str) -> bool {
+    matches!(
+        kind.strip_prefix("event.").unwrap_or(kind),
+        "task.started"
+            | "task.terminated"
+            | "background.task.started"
+            | "background.task.terminated"
+            | "subagent.spawned"
+            | "subagent.started"
+            | "subagent.suspended"
+            | "subagent.completed"
+            | "subagent.failed"
+    )
 }

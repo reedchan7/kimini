@@ -9,20 +9,24 @@ default-run = "kimini"
 
 [features]
 default = ["native"]
-native = ["dep:async-channel", "dep:gpui", "dep:gpui-component", "dep:gpui-platform", "dep:tungstenite", "dep:ureq", "dep:wry"]
+native = ["dep:async-channel", "dep:gpui", "dep:gpui-component", "dep:gpui-component-assets", "dep:gpui-platform", "dep:mime_guess", "dep:portable-pty", "dep:tungstenite", "dep:ureq", "dep:vte", "dep:wry"]
 legacy-web = ["dep:tao", "dep:wry", "dep:muda"]
 
 [dependencies]
 async-channel = { version = "2", optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", optional = true }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", optional = true }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", optional = true }
 gpui-platform = { package = "gpui_platform", git = "https://github.com/zed-industries/zed", features = ["font-kit", "runtime_shaders"], optional = true }
+mime_guess = { version = "2", optional = true }
+portable-pty = { version = "0.9", optional = true }
 tao = { version = "0.34", optional = true }
 wry = { version = "0.55", optional = true }
 url = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "2.12", default-features = false, features = ["json"], optional = true }
+vte = { version = "0.15", features = ["ansi"], optional = true }
 tungstenite = { version = "0.28", default-features = false, features = ["handshake"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

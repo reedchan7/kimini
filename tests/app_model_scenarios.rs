@@ -1,7 +1,7 @@
 mod support;
 
 use kimini::model::{AppModel, ApplyOutcome};
-use kimini::protocol::{SessionSnapshot, WireEvent};
+use kimini::protocol::{MessagePage, Page, SessionSnapshot, SessionStatus, WireEvent};
 use support::{event, snapshot};
 
 #[test]
@@ -40,6 +40,247 @@ fn snapshots_update_the_single_session_catalog_without_duplicates() {
 
     assert_eq!(model.sessions().len(), 1);
     assert_eq!(model.sessions()[0].title, "Updated title");
+}
+
+#[test]
+fn removing_the_active_session_selects_the_next_available_session() {
+    let first = snapshot(7, "hello", "");
+    let mut second = first.session.clone();
+    second.id = "sess_02".into();
+    let mut model = AppModel::default();
+    model.replace_sessions(vec![first.session.clone(), second]);
+    model.seed(first);
+
+    let selected = model.remove_session("sess_01");
+
+    assert_eq!(selected.as_deref(), Some("sess_02"));
+    assert_eq!(model.sessions().len(), 1);
+}
+
+#[test]
+fn session_pages_append_in_order_without_duplicates() {
+    let first = snapshot(7, "hello", "");
+    let mut second = first.session.clone();
+    second.id = "sess_02".into();
+    let mut third = second.clone();
+    third.id = "sess_03".into();
+    let mut model = AppModel::default();
+    model.replace_session_page(Page {
+        items: vec![first.session, second.clone()],
+        has_more: true,
+    });
+
+    let added = model.append_session_page(Page {
+        items: vec![second, third],
+        has_more: false,
+    });
+
+    assert_eq!(added, 1);
+    assert_eq!(
+        model
+            .sessions()
+            .iter()
+            .map(|session| session.id.as_str())
+            .collect::<Vec<_>>(),
+        ["sess_01", "sess_02", "sess_03"]
+    );
+    assert!(!model.has_more_sessions());
+}
+
+#[test]
+fn empty_overlapping_session_pages_stop_repeated_paging() {
+    let first = snapshot(7, "hello", "").session;
+    let mut model = AppModel::default();
+    model.replace_session_page(Page {
+        items: vec![first.clone()],
+        has_more: true,
+    });
+
+    assert_eq!(
+        model.append_session_page(Page {
+            items: vec![first],
+            has_more: true,
+        }),
+        0
+    );
+    assert!(!model.has_more_sessions());
+}
+
+#[test]
+fn archived_pages_are_isolated_from_the_active_catalog() {
+    let active = snapshot(7, "hello", "").session;
+    let mut archived = active.clone();
+    archived.id = "archived_01".into();
+    archived.archived = true;
+    let mut model = AppModel::default();
+    model.replace_sessions(vec![active]);
+
+    model.replace_archived_session_page(Page {
+        items: vec![archived.clone()],
+        has_more: true,
+    });
+    assert!(model.archived_sessions_loaded());
+    assert!(model.has_more_archived_sessions());
+    assert_eq!(model.sessions().len(), 1);
+    assert_eq!(model.archived_sessions(), &[archived]);
+
+    model.remove_archived_session("archived_01");
+    assert!(model.archived_sessions().is_empty());
+}
+
+#[test]
+fn archived_pagination_deduplicates_and_invalidation_forces_a_fresh_catalog() {
+    let mut first = snapshot(7, "hello", "").session;
+    first.id = "archived_01".into();
+    first.archived = true;
+    let mut second = first.clone();
+    second.id = "archived_02".into();
+    let mut model = AppModel::default();
+    model.replace_archived_session_page(Page {
+        items: vec![first.clone()],
+        has_more: true,
+    });
+
+    assert_eq!(
+        model.append_archived_session_page(Page {
+            items: vec![first, second],
+            has_more: true,
+        }),
+        1
+    );
+    assert_eq!(model.archived_sessions().len(), 2);
+    assert!(model.archived_sessions_loaded());
+    assert!(model.has_more_archived_sessions());
+
+    model.invalidate_archived_sessions();
+    assert!(model.archived_sessions().is_empty());
+    assert!(!model.archived_sessions_loaded());
+    assert!(!model.has_more_archived_sessions());
+}
+
+#[test]
+fn runtime_status_is_attached_only_to_its_seeded_conversation() {
+    let mut model = AppModel::default();
+    model.seed(snapshot(7, "hello", ""));
+    let runtime = SessionStatus {
+        busy: false,
+        model: Some("kimi-k2".into()),
+        thinking_level: "high".into(),
+        permission: "manual".into(),
+        plan_mode: false,
+        swarm_mode: true,
+        context_tokens: 42,
+        max_context_tokens: 100,
+        context_usage: 0.42,
+    };
+
+    assert!(model.active_runtime().is_none());
+    model.set_runtime("missing", runtime.clone());
+    assert!(model.active_runtime().is_none());
+    model.set_runtime("sess_01", runtime);
+    assert_eq!(model.active_runtime().unwrap().context_tokens, 42);
+}
+
+#[test]
+fn goal_snapshots_recover_and_live_completion_clears_the_strip() {
+    let mut model = AppModel::default();
+    model.seed(snapshot(7, "hello", ""));
+    let goal = serde_json::from_value(serde_json::json!({
+        "goalId": "goal_01",
+        "objective": "Ship native GUI",
+        "status": "active",
+        "turnsUsed": 1,
+        "tokensUsed": 42,
+        "wallClockMs": 1000,
+        "budget": {
+            "tokenBudget": null,
+            "turnBudget": null,
+            "wallClockBudgetMs": null,
+            "remainingTokens": null,
+            "remainingTurns": null,
+            "remainingWallClockMs": null
+        }
+    }))
+    .unwrap();
+    model.set_goal("sess_01", Some(goal));
+    assert_eq!(model.active_goal().unwrap().objective, "Ship native GUI");
+
+    let completion = event(
+        "goal.updated",
+        8,
+        false,
+        None,
+        serde_json::json!({
+            "snapshot": {
+                "goalId": "goal_01",
+                "objective": "Ship native GUI",
+                "status": "complete",
+                "turnsUsed": 2,
+                "tokensUsed": 84,
+                "wallClockMs": 2000,
+                "budget": {
+                    "tokenBudget": null,
+                    "turnBudget": null,
+                    "wallClockBudgetMs": null,
+                    "remainingTokens": null,
+                    "remainingTurns": null,
+                    "remainingWallClockMs": null
+                }
+            }
+        }),
+    );
+    assert_eq!(model.apply(completion), ApplyOutcome::Applied);
+    assert!(model.active_goal().is_none());
+}
+
+#[test]
+fn history_for_an_unseeded_session_is_rejected_without_creating_state() {
+    let mut model = AppModel::default();
+
+    assert!(!model.prepend_messages(
+        "missing",
+        MessagePage {
+            items: Vec::new(),
+            has_more: false,
+        },
+    ));
+    assert!(model.active_conversation().is_none());
+}
+
+#[test]
+fn older_message_pages_are_reversed_and_deduplicated_before_prepend() {
+    let mut initial = snapshot(7, "latest", "");
+    initial.messages.has_more = true;
+    let latest = initial.messages.items[0].clone();
+    let mut middle = latest.clone();
+    middle.id = "msg_middle".into();
+    middle.content = serde_json::from_value(serde_json::json!([
+        { "type": "text", "text": "middle" }
+    ]))
+    .unwrap();
+    let mut oldest = middle.clone();
+    oldest.id = "msg_oldest".into();
+    oldest.content = serde_json::from_value(serde_json::json!([
+        { "type": "text", "text": "oldest" }
+    ]))
+    .unwrap();
+    let mut model = AppModel::default();
+    model.seed(initial);
+
+    assert!(model.prepend_messages(
+        "sess_01",
+        MessagePage {
+            items: vec![middle, oldest, latest],
+            has_more: false,
+        },
+    ));
+
+    let conversation = model.active_conversation().unwrap();
+    assert_eq!(conversation.messages.len(), 3);
+    assert_eq!(conversation.messages[0].plain_text(), "oldest");
+    assert_eq!(conversation.messages[1].plain_text(), "middle");
+    assert_eq!(conversation.messages[2].plain_text(), "latest");
+    assert!(!conversation.has_more_messages);
 }
 
 #[test]

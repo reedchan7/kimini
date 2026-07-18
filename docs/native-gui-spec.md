@@ -1,6 +1,6 @@
 # Native Kimi Code GUI Specification
 
-Status: G0 implementation checkpoint; final G0 acceptance remains open
+Status: Native functional alpha; G0 release gates remain open while G1/G2 feature slices are implemented
 
 Date: 2026-07-18
 
@@ -11,7 +11,7 @@ This is the authoritative implementation specification. The framework and Codex 
 
 ## Problem Statement
 
-Kimi Code Web exposes the complete Kimi Code workflow, but its permanent HTML, CSS, JavaScript, DOM, WebKit, and GPU process tree carries substantial long-session memory and repaint cost. The current Kimini application makes that web experience easier to launch, yet it remains a thin WebView shell and inherits the same rendering behavior.
+Kimi Code Web exposes the complete Kimi Code workflow, but its permanent HTML, CSS, JavaScript, DOM, WebKit, and GPU process tree carries substantial long-session memory and repaint cost. The original Kimini application made that web experience easier to launch while inheriting the same rendering behavior. The new native application renders the core workflow with GPUI and keeps the Web shell as a separate compatibility app.
 
 Users need a real desktop agent workstation with native responsiveness, predictable long-session behavior, first-class keyboard and accessibility support, and the complete Kimi Code interaction model. Kimi Code Web must remain available during the transition and as a compatibility fallback. Future browser automation must be able to run visibly and, later, inside Kimini without turning the permanent application shell into a browser renderer.
 
@@ -127,7 +127,7 @@ Browser functionality is an on-demand subsystem. The first browser delivery laun
 - The applications can be installed and run simultaneously. Native is the primary development target; Kimini Web remains an independently launchable fallback throughout the parity work.
 - Both modes use the same daemon discovery and bearer-token rules. No session database or transcript migration is introduced.
 - Native parity means user-visible behavior and daemon semantics match Kimi Code Web. DOM structure and web-only implementation details are not parity requirements.
-- Kimi Code Web's current design system is the visual baseline: 264-point sidebar, 760-point normal conversation width, 920-point wide content, 4-point spacing scale, restrained radii and shadows, native light/dark/system appearance, and no decorative animation that creates idle repaint.
+- Kimi Code Web's current design system is the visual baseline: 232-point sidebar, 720-point normal conversation width, one 400-point detail slot, a 4-point spacing scale, restrained radii and shadows, native light/dark/system appearance, and no decorative animation that creates idle repaint.
 
 ### Process and ownership model
 
@@ -229,7 +229,7 @@ Browser Broker ⇄ MCP tools for Kimi
 - Windows follows after the native core passes on macOS; GPUI input, AccessKit, menus, window behavior, and WRY/WebView2 integration are treated as release gates.
 - Linux X11 can follow the same child-view route. Wayland in-window browser embedding waits for a supported backend; companion browser mode remains the fallback.
 - GPUI and gpui-component track their current upstream Git sources through exact `Cargo.lock` revisions and are updated intentionally together. This is required because crates.io GPUI 0.2.2 predates the AccessKit integration used by Kimini.
-- The G0 dependency set is GPUI/gpui-component/gpui-platform, Serde, `ureq`, `tungstenite`, `async-channel`, URL, and WRY. New rendering or parsing crates require a demonstrated missing capability.
+- The native dependency set is GPUI/gpui-component/gpui-platform, gpui-component assets, Serde, `ureq`, `tungstenite`, `async-channel`, `vte`, URL, and WRY. New rendering or parsing crates require a demonstrated missing capability.
 
 ### Delivery sequence and acceptance gates
 
@@ -238,6 +238,16 @@ Browser Broker ⇄ MCP tools for Kimi
 3. **G2 — coding parity:** file tree/search/preview, diff/git state, terminal, tasks/subagents, side chat, goals, skills, export, rich-content rendering, and complete approval/question variants.
 4. **G3 — browser capability:** visible isolated Chromium plus MCP/Playwright/CDP, permissions, user takeover, browser lifecycle, then the in-app frame view and bounded WRY human-browsing pane.
 5. **G4 — native release:** same-workload product measurements, compatibility fallback, packaging/signing, crash recovery, documentation, and release hardening while retaining the separate Kimini Web app.
+
+Feature implementation may run ahead of formal gate promotion. The current
+alpha includes most daily-conversation flows and selected coding surfaces:
+session lifecycle and pagination, attachments, queued prompts and steering,
+runtime/goal controls, grouped tool traces, a thinking detail pane, files and
+git state, tasks/subagents, skills, side chat, export, managed auth, and
+daemon-backed terminal tabs. This does not close the G1 or G2 gates: dark mode,
+notifications, complete rich-content rendering, raw interactive terminal input,
+all file/media previews, and the remaining accessibility/performance scenarios
+are still open.
 
 G0 continues only when all of these hold on representative hardware:
 
@@ -251,13 +261,13 @@ G0 continues only when all of these hold on representative hardware:
 
 ### Current G0 evidence
 
-- Both signed ad-hoc macOS bundles build together: `Kimini.app` is 12 MiB and `Kimini Web.app` is 1.7 MiB on arm64.
-- Protocol and pure application-state code currently reports 93.99% line, 89.89% region, and 97.56% function coverage. GUI, platform, process, and transport glue remain outside this numeric gate and use live scenarios.
+- Both signed ad-hoc macOS bundles build together: `Kimini.app` is 14 MiB and `Kimini Web.app` is 1.8 MiB on arm64.
+- Protocol and pure application-state code currently reports 97.03% line, 95.21% region, and 99.05% function coverage. GUI, platform, process, and transport glue remain outside this numeric gate and use live scenarios.
 - The local-daemon suite reads the real session list and atomic snapshot, then completes an authenticated v1 WebSocket handshake without mutating user sessions.
 - A single-instance macOS accessibility-tree run exposed application, heading, status, list, button, article, and text-area semantics. Packaged CJK composition and streaming announcements remain open.
 - The bounded WRY pane created WebContent, GPU, and Networking helpers only after opening. Closing removed WebContent; pooled helper residue lasted until host exit in that run.
 - A short release-binary spot sample with both applications connected to the same daemon placed the native host around 87–97 MiB and the Web host around 99 MiB, plus roughly 317 MiB of WebKit helpers. This is diagnostic evidence only; it is not the matched p95 product benchmark.
-- The 1,000-turn, sustained-streaming, packaged CJK, overlap, frame-time, input-latency, and matched process-family scenarios remain open, so G1 has not started.
+- The 1,000-turn, sustained-streaming, packaged CJK, overlap, frame-time, input-latency, and matched process-family scenarios remain open, so the formal G1 acceptance gate has not started.
 
 ## Testing Decisions
 
@@ -292,4 +302,4 @@ G0 continues only when all of these hold on representative hardware:
 - Codex is used as a protocol, interaction, permission, and browser-boundary reference. Its inspected desktop shell is Electron/Chromium and provides no public native GUI implementation to copy.
 - Zed proves GPUI's coding-workload fit and raw-window-handle escape hatch. Zed's browser MCP extensions prove external browser control; its unmerged WebView prototypes document child-surface z-order, focus, clipping, and Wayland limitations.
 - Supporting evidence lives in [Native GUI Framework Selection](./native-gui-framework-selection.md) and [Codex Reference Architecture](./codex-reference-architecture.md).
-- G1 starts only after the remaining G0 gates are recorded as passed or explicitly re-scoped with evidence.
+- Formal G1 acceptance starts only after the remaining G0 gates are recorded as passed or explicitly re-scoped with evidence; implementation slices may land earlier behind the same test and compatibility discipline.
