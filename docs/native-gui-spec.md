@@ -84,7 +84,7 @@ Browser functionality is an on-demand subsystem. The first browser delivery laun
 43. As a developer, I want unified diffs with additions, deletions, context, and file summaries, so that agent changes are reviewable.
 44. As a developer, I want repository branch, ahead/behind, pull request, and change totals, so that workspace status is visible.
 45. As a developer, I want to open or reveal a file in a configured external application, so that editing can remain in my preferred IDE.
-46. As a developer, I want native terminal tabs backed by Kimi daemon terminals, so that shell work shares the session working directory and lifecycle.
+46. As a developer, I want native terminal tabs that prefer Kimi daemon terminals and fall back to a local Rust PTY when the packaged daemon backend is unavailable, so that shell work keeps the session working directory without blocking the workflow.
 47. As a terminal user, I want resize, input, scrollback, reconnect backfill, exit status, and close behavior, so that terminal sessions survive ordinary UI changes.
 48. As a user, I want skills listed and activated for a session or workspace, so that Kimi capabilities are discoverable from the GUI.
 
@@ -201,7 +201,7 @@ Browser Broker ⇄ MCP tools for Kimi
 - Tool output is summarized in the transcript and expanded in place or in the detail slot. Large output is never fully laid out by default.
 - Markdown and syntax highlighting use gpui-component primitives where they meet behavior and accessibility needs. Kimini adds components only for Kimi-specific semantics.
 - Mermaid and KaTeX parity uses one reusable on-demand rich-content renderer rather than one WebView per message. Rendered output is cached as a native image/vector surface with copyable source and accessible description; the helper unloads when idle.
-- Terminal behavior uses a proven VT parser and a GPUI renderer. Kimini does not implement terminal escape parsing from scratch.
+- Terminal behavior uses `vte`, `portable-pty`, and a GPUI renderer. The daemon remains the preferred lifecycle owner; a clearly labeled local PTY fallback covers packaged-backend failures without hiding the boundary from the user.
 - Full source editing, language servers, and debugger UI are excluded; file preview, review, and external-editor handoff cover the Kimi Code Web product boundary.
 
 ### Browser architecture
@@ -229,7 +229,7 @@ Browser Broker ⇄ MCP tools for Kimi
 - Windows follows after the native core passes on macOS; GPUI input, AccessKit, menus, window behavior, and WRY/WebView2 integration are treated as release gates.
 - Linux X11 can follow the same child-view route. Wayland in-window browser embedding waits for a supported backend; companion browser mode remains the fallback.
 - GPUI and gpui-component track their current upstream Git sources through exact `Cargo.lock` revisions and are updated intentionally together. This is required because crates.io GPUI 0.2.2 predates the AccessKit integration used by Kimini.
-- The native dependency set is GPUI/gpui-component/gpui-platform, gpui-component assets, Serde, `ureq`, `tungstenite`, `async-channel`, `vte`, URL, and WRY. New rendering or parsing crates require a demonstrated missing capability.
+- The native dependency set is GPUI/gpui-component/gpui-platform, gpui-component assets, Serde, `ureq`, `tungstenite`, `async-channel`, `vte`, `portable-pty`, URL, and WRY. New rendering or parsing crates require a demonstrated missing capability.
 
 ### Delivery sequence and acceptance gates
 
@@ -241,10 +241,10 @@ Browser Broker ⇄ MCP tools for Kimi
 
 Feature implementation may run ahead of formal gate promotion. The current
 alpha includes most daily-conversation flows and selected coding surfaces:
-session lifecycle and pagination, attachments, queued prompts and steering,
+session lifecycle and per-workspace first-page pagination, attachments, queued prompts and steering,
 runtime/goal controls, grouped tool traces, a thinking detail pane, files and
 git state, tasks/subagents, skills, side chat, export, managed auth, and
-daemon-backed terminal tabs. This does not close the G1 or G2 gates: dark mode,
+daemon-first terminal tabs with a labeled local PTY fallback. This does not close the G1 or G2 gates: dark mode,
 notifications, complete rich-content rendering, raw interactive terminal input,
 all file/media previews, and the remaining accessibility/performance scenarios
 are still open.
@@ -263,7 +263,7 @@ G0 continues only when all of these hold on representative hardware:
 
 - Both signed ad-hoc macOS bundles build together: `Kimini.app` is 14 MiB and `Kimini Web.app` is 1.8 MiB on arm64.
 - Protocol and pure application-state code currently reports 97.03% line, 95.21% region, and 99.05% function coverage. GUI, platform, process, and transport glue remain outside this numeric gate and use live scenarios.
-- The local-daemon suite reads the real session list and atomic snapshot, then completes an authenticated v1 WebSocket handshake without mutating user sessions.
+- The local-daemon suite reads the real session list and atomic snapshot, then completes an authenticated v1 WebSocket handshake without mutating user sessions. A separately gated live scenario creates an isolated session, completes a real prompt round trip, and archives the fixture.
 - A single-instance macOS accessibility-tree run exposed application, heading, status, list, button, article, and text-area semantics. Packaged CJK composition and streaming announcements remain open.
 - The bounded WRY pane created WebContent, GPU, and Networking helpers only after opening. Closing removed WebContent; pooled helper residue lasted until host exit in that run.
 - A short release-binary spot sample with both applications connected to the same daemon placed the native host around 87–97 MiB and the Web host around 99 MiB, plus roughly 317 MiB of WebKit helpers. This is diagnostic evidence only; it is not the matched p95 product benchmark.
@@ -275,7 +275,7 @@ G0 continues only when all of these hold on representative hardware:
 - The primary seam is an `AppModel` scenario harness. A scenario feeds user intents, command results, snapshots, and ordered WebSocket frames into the reducer, then reads semantic view state and outbound effects. This one seam covers most product behavior without a live window or daemon.
 - G0 recorded fixtures cover snapshot seeding, ordered streaming deltas, durable duplicates, cursor gaps, volatile offsets, approval/question restoration, completed-message reconciliation, and unknown events. Later-stage fixtures are added with the feature that consumes them.
 - Protocol contract coverage parses representative session, snapshot, message, interaction, control, and event payloads into tolerant Rust DTOs. Field additions remain compatible; missing required fields fail loudly.
-- The current loopback suite exercises discovery, session listing, a real snapshot, and a real authenticated WebSocket handshake without mutating session data. Prompt/abort and interaction mutation scenarios remain gated follow-up work.
+- The current loopback suite exercises discovery, session listing, a real snapshot, and a real authenticated WebSocket handshake without mutating session data. The opt-in mutation scenario exercises prompt submission through a completed assistant response and archives its isolated fixture; approval/question mutation scenarios remain gated follow-up work.
 - G0 GPUI acceptance reads the real macOS accessibility tree and invokes exposed buttons through AccessKit. Packaged CJK composition, streaming announcements, and virtual-list anchoring remain explicit manual/automation work before the gate closes.
 - Browser coverage starts Browser Broker with an isolated test profile and a local test site, then covers navigation, DOM actions, screenshots/frames, permission denial, takeover exclusivity, crash recovery, credential redaction, and complete process cleanup.
 - Performance scenarios are blank launch, short session, 1,000-turn long session, full scroll, sustained streaming, browser launch, active browser use, and browser close. Measurements include the complete Kimini client/browser helper process family and report the daemon separately.

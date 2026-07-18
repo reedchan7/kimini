@@ -80,8 +80,10 @@ The current native path includes:
 - compact grouped tool traces and a dedicated thinking-preview pane modeled on
   the Kimi Code Web information hierarchy;
 - workspace file browsing, search, previews, git state, and diff summaries;
-- background task/subagent rosters, isolated BTW side chats, and daemon-backed
+- background task/subagent rosters, isolated BTW side chats, and daemon-first
   terminal tabs with VT output, replay, resize, command input, and close;
+- a local Rust PTY fallback that preserves the terminal workflow when a
+  packaged Kimi daemon cannot load its native PTY backend;
 - managed authentication state and English/Simplified Chinese host UI;
 - AccessKit roles, labels, focus traversal, and native CJK input plumbing;
 - a rectangular WRY child view that is created only after an explicit browser
@@ -128,6 +130,9 @@ Native startup resolves the daemon from `~/.kimi-code/server/lock` and
 `server.token`, health-probes it, and starts `kimi server run` when needed.
 Bearer tokens remain in headers or the WebSocket subprotocol and never enter
 the native browser URL, logs, or rendered state.
+
+Native workspace shortcuts are `Cmd+Shift+E` for files, `Cmd+Shift+K` for
+skills, `Cmd+J` for the terminal, and `Cmd+Shift+T` for tasks.
 
 ## Build and package
 
