@@ -48,7 +48,7 @@ PUBLISH_FLAGS ?=
         check test coverage-core fmt fmt-check clippy lint clean clean-dist size \
         install uninstall doctor \
         app app-native app-web apps dmg dmg-web zip zip-web package-all \
-        publish-release install-app install-web-app \
+        publish-release sparkle install-app install-web-app \
         uninstall-app uninstall-web-app uninstall-all \
         open-app open-web-app
 
@@ -119,6 +119,10 @@ release-web: ## Release build for Kimini Web
 # macOS Application
 # ---------------------------------------------------------------------------
 ##@ macOS App
+
+sparkle: ## Download the pinned Sparkle framework and release tools
+	@test "$$(uname -s)" = "Darwin" || { echo "error: Sparkle requires macOS"; exit 1; }
+	bash ./scripts/fetch-sparkle.sh
 
 # Extra flags forwarded to package-macos.sh when TARGET/ARCH set
 PACKAGE_FLAGS :=
@@ -248,7 +252,7 @@ test: ## Run tests
 
 coverage-core: ## Enforce 90% line coverage for protocol and state logic
 	$(CARGO) llvm-cov --all-features --all-targets --summary-only \
-	  --ignore-filename-regex 'src/(api|bin|daemon|i18n|legacy_web|native)/|src/i18n\.rs' \
+	  --ignore-filename-regex 'src/(api|bin|daemon|i18n|legacy_web|native)/|src/(i18n|updater)\.rs' \
 	  --fail-under-lines 90
 
 fmt: ## Format sources with rustfmt

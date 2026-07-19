@@ -20,6 +20,8 @@ use wry::{NewWindowResponse, WebViewBuilder};
 
 use crate::daemon;
 use crate::i18n::{self, Lang};
+#[cfg(target_os = "macos")]
+use crate::updater::{LATEST_RELEASE_URL, Updater};
 
 use super::navigation::{explicit_url, is_loopback, origin_for_log};
 use super::pages::launch_html;
@@ -112,6 +114,8 @@ pub fn run() -> wry::Result<()> {
 
     #[cfg(target_os = "macos")]
     let settings_slot: Rc<RefCell<Option<settings::SettingsWindow>>> = Rc::new(RefCell::new(None));
+    #[cfg(target_os = "macos")]
+    let updater = Updater::new();
 
     let window = WindowBuilder::new()
         .with_title(APP_TITLE)
@@ -266,6 +270,10 @@ pub fn run() -> wry::Result<()> {
                 "settings" => {
                     settings::open_or_focus(target, &proxy, lang_cell.get(), &settings_slot);
                 }
+                "check-for-updates" if !updater.check_now() => {
+                    open_external(LATEST_RELEASE_URL);
+                }
+                "check-for-updates" => {}
                 _ => {}
             },
             #[cfg(target_os = "macos")]

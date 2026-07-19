@@ -9,6 +9,7 @@ use crate::daemon::Connection;
 use crate::i18n::{Lang, Strings};
 use crate::model::AppModel;
 use crate::protocol::ModelCatalogItem;
+use crate::updater::Updater;
 
 use super::attachment::Attachments;
 use super::auth::AuthState;
@@ -213,6 +214,7 @@ pub(super) struct Shell {
     pub(super) skill_request_generation: u64,
     pub(super) attachments: Attachments,
     pub(super) question_drafts: QuestionDrafts,
+    pub(super) updater: Updater,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -401,6 +403,7 @@ impl Shell {
             skill_request_generation: 0,
             attachments: Attachments::default(),
             question_drafts: QuestionDrafts::default(),
+            updater: Updater::new(),
             _subscriptions: subscriptions,
         };
         shell.start_local_terminal_events(cx);

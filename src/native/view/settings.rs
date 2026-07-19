@@ -6,6 +6,7 @@ use super::super::commands::config::ConfigPreference;
 use super::super::theme::*;
 use super::panel::panel_button;
 use super::settings_components::*;
+use crate::updater::LATEST_RELEASE_URL;
 
 impl Shell {
     pub(super) fn auth_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -651,6 +652,24 @@ impl Shell {
             .map(|config| config.telemetry != Some(false));
         let saving = self.config_saving;
         settings_section(self.strings.native.settings_advanced)
+            .child(settings_action_row(
+                strings.settings_version,
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(env!("CARGO_PKG_VERSION"))
+                    .child(
+                        panel_button(self.strings.check_for_updates, "check-for-updates")
+                            .border_1()
+                            .border_color(theme_rgb(BORDER))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if !this.updater.check_now() {
+                                    cx.open_url(LATEST_RELEASE_URL);
+                                }
+                            })),
+                    ),
+            ))
             .child(settings_row(strings.settings_daemon, endpoint))
             .child(settings_row(strings.settings_backend, backend))
             .child(settings_row(

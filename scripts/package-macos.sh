@@ -15,6 +15,8 @@ DIST="${DIST:-$ROOT/dist}"
 ICON_SRC="${ICON_SRC:-$ROOT/docs/brand/exports/app-icon-1024.png}"
 PLIST_SRC="$ROOT/packaging/macos/Info.plist"
 ICNS_CACHE="$ROOT/packaging/macos/AppIcon.icns"
+SPARKLE_ROOT="${SPARKLE_ROOT:-$ROOT/.sparkle}"
+SPARKLE_PUBLIC_KEY_FILE="$ROOT/packaging/macos/sparkle-public-key.txt"
 
 # Optional cargo target triple, e.g. aarch64-apple-darwin / x86_64-apple-darwin
 TARGET="${TARGET:-}"
@@ -106,14 +108,14 @@ case "$APP_KIND" in
     BIN_NAME="kimini"
     APP_NAME="Kimini"
     ARTIFACT_NAME="Kimini"
-    BUNDLE_ID="app.kimini"
+    BUNDLE_ID="${BUNDLE_ID:-app.kimini}"
     CARGO_FEATURE="native"
     ;;
   web)
     BIN_NAME="kimini-web"
     APP_NAME="Kimini Web"
     ARTIFACT_NAME="Kimini-Web"
-    BUNDLE_ID="app.kimini.web"
+    BUNDLE_ID="${BUNDLE_ID:-app.kimini.web}"
     CARGO_FEATURE="legacy-web"
     ;;
   *)
@@ -126,6 +128,19 @@ APP_DIR="$DIST/${APP_NAME}.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 RES_DIR="$CONTENTS/Resources"
+FRAMEWORKS_DIR="$CONTENTS/Frameworks"
+
+bash "$ROOT/scripts/fetch-sparkle.sh"
+SPARKLE_FRAMEWORK="$SPARKLE_ROOT/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
+  echo "error: Sparkle.framework missing: $SPARKLE_FRAMEWORK" >&2
+  exit 1
+fi
+if [[ ! -f "$SPARKLE_PUBLIC_KEY_FILE" ]]; then
+  echo "error: Sparkle public key missing: $SPARKLE_PUBLIC_KEY_FILE" >&2
+  exit 1
+fi
+SPARKLE_PUBLIC_KEY="$(<"$SPARKLE_PUBLIC_KEY_FILE")"
 
 if [[ -n "${VERSION:-}" ]]; then
   :
@@ -254,6 +269,8 @@ if [[ "$ARCH_LABEL" == "unknown" ]]; then
 fi
 
 ARTIFACT_STEM="${ARTIFACT_NAME}-${VERSION}-macos-${ARCH_LABEL}"
+UPDATE_FEED_NAME="${ARTIFACT_NAME}-macos-${ARCH_LABEL}.xml"
+UPDATE_FEED_URL="${UPDATE_FEED_URL:-https://github.com/reedchan7/kimini/releases/latest/download/${UPDATE_FEED_NAME}}"
 
 # ---------------------------------------------------------------------------
 # 2. AppIcon.icns (regenerate when source is newer)
@@ -275,17 +292,20 @@ fi
 # ---------------------------------------------------------------------------
 echo "==> assemble ${APP_NAME}.app (v${VERSION}, ${ARCH_LABEL})"
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RES_DIR" "$DIST"
+mkdir -p "$MACOS_DIR" "$RES_DIR" "$FRAMEWORKS_DIR" "$DIST"
 
 cp "$REL_BIN" "$MACOS_DIR/$BIN_NAME"
 chmod 755 "$MACOS_DIR/$BIN_NAME"
 cp "$ICNS_CACHE" "$RES_DIR/AppIcon.icns"
+ditto "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/Sparkle.framework"
 
 sed \
-  -e "s/@VERSION@/${VERSION}/g" \
-  -e "s/@APP_NAME@/${APP_NAME}/g" \
-  -e "s/@BIN_NAME@/${BIN_NAME}/g" \
-  -e "s/@BUNDLE_ID@/${BUNDLE_ID}/g" \
+  -e "s|@VERSION@|${VERSION}|g" \
+  -e "s|@APP_NAME@|${APP_NAME}|g" \
+  -e "s|@BIN_NAME@|${BIN_NAME}|g" \
+  -e "s|@BUNDLE_ID@|${BUNDLE_ID}|g" \
+  -e "s|@UPDATE_FEED_URL@|${UPDATE_FEED_URL}|g" \
+  -e "s|@SPARKLE_PUBLIC_KEY@|${SPARKLE_PUBLIC_KEY}|g" \
   "$PLIST_SRC" > "$CONTENTS/Info.plist"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
 
@@ -294,6 +314,7 @@ printf 'APPL????' > "$CONTENTS/PkgInfo"
 # ---------------------------------------------------------------------------
 echo "==> codesign (ad-hoc)"
 codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_DIR"
+codesign --verify --deep --strict "$APP_DIR"
 
 if [[ ! -x "$MACOS_DIR/$BIN_NAME" ]] || [[ ! -f "$CONTENTS/Info.plist" ]]; then
   echo "error: incomplete bundle at $APP_DIR" >&2

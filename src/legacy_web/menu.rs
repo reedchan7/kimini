@@ -17,6 +17,7 @@ pub(super) fn install(strings: &Strings) -> muda::Menu {
                 true,
                 "CmdOrCtrl+,".parse().ok(),
             ),
+            &MenuItem::with_id("check-for-updates", strings.check_for_updates, true, None),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::hide(None),
             &PredefinedMenuItem::hide_others(None),

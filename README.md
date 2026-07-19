@@ -8,9 +8,9 @@
 
 [English](README.md) · [简体中文](README_CN.md)
 
-<a href="https://github.com/reedchan7/kimini/releases/latest"><img src="https://img.shields.io/badge/version-0.3.0-4A90D9?style=flat-square&logo=github" alt="Version 0.3.0"/></a>
+<a href="https://github.com/reedchan7/kimini/releases/latest"><img src="https://img.shields.io/badge/version-0.3.1-4A90D9?style=flat-square&logo=github" alt="Version 0.3.1"/></a>
 <a href="#compatibility-and-release-facts"><img src="https://img.shields.io/badge/core%20coverage-97.03%25-brightgreen?style=flat-square&logo=rust" alt="Core coverage 97.03%"/></a>
-<a href="#compatibility-and-release-facts"><img src="https://img.shields.io/badge/local%20tests-186%20passed-brightgreen?style=flat-square&logo=rust" alt="186 local tests passed"/></a>
+<a href="#compatibility-and-release-facts"><img src="https://img.shields.io/badge/local%20tests-188%20passed-brightgreen?style=flat-square&logo=rust" alt="188 local tests passed"/></a>
 <img src="https://img.shields.io/badge/platform-macOS%2014%2B-black?style=flat-square&logo=apple&logoColor=white" alt="macOS 14+"/>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"/></a>
 
@@ -31,7 +31,7 @@ available through a separate companion app.
 | Interface | GPUI + Metal | Kimi Code Web in system WKWebView |
 | Connection | Typed REST + WebSocket | Daemon-served Web UI |
 | Renderer | No permanent browser renderer | WebKit process family |
-| Bundle | **14.1 MiB** | **1.8 MiB** |
+| Bundle | **17.1 MiB** | **4.8 MiB** |
 
 Install both. They run side by side against the same local daemon and session
 store.
@@ -49,6 +49,8 @@ store.
   one desktop workspace.
 - **Browser cost is on demand.** The native app creates its human-preview
   WKWebView only when you open Browser and destroys the view when closed.
+- **Signed updates are built in.** Both apps check daily and can install
+  Ed25519-signed updates in the background; manual checks remain available.
 
 Compared with a broad agent environment such as
 [Codex](https://openai.com/index/introducing-the-codex-app/), Kimini is
@@ -73,6 +75,9 @@ Download the matching architecture from
 
 Current builds are ad-hoc signed. On first launch, right-click the app and
 choose **Open** if macOS blocks it.
+
+Updater-enabled builds use Sparkle for atomic replacement and restart. Kimini
+checks once per day by default; use **Check for Updates…** at any time.
 
 Kimini reads `~/.kimi-code/server/lock` and `server.token`, health-probes the
 daemon, and starts `kimi server run` when needed. Credentials stay in request
@@ -108,10 +113,10 @@ navigation.
   authentication as `kimi web`.
 - The native terminal prefers the daemon backend and retains a local Rust PTY
   fallback when the packaged daemon cannot load its PTY module.
-- Both 0.3.0 arm64 app bundles build and run together. The release bundles are
-  14.1 MiB native and 1.8 MiB Web on the current build machine.
+- Both arm64 app bundles build and run together. With the embedded updater, the
+  current bundles are 17.1 MiB native and 4.8 MiB Web.
 - Protocol and pure state logic currently have **97.03% line coverage**. The
-  local native/Web release suite contains **186 automated tests**.
+  local native/Web release suite contains **188 automated tests**.
 
 The native app is an early release. Packaged CJK composition, long-session
 performance, streaming accessibility, rich media, and complete interactive
@@ -127,6 +132,10 @@ make apps         # both .app bundles in dist/
 make package-all  # both architectures, DMG + zip
 ```
 
+Packaging downloads the pinned Sparkle framework on first use. Local releases
+also sign four architecture-specific update feeds before uploading them with
+the application archives.
+
 See the [native GUI specification](docs/native-gui-spec.md) and
 [framework decision](docs/native-gui-framework-selection.md) for deeper design
 and performance methodology.
@@ -140,4 +149,5 @@ AI. Kimini is not affiliated with Moonshot AI.
 with [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui),
 [gpui-component](https://github.com/longbridge/gpui-component),
 [wry](https://github.com/tauri-apps/wry), and
-[tao](https://github.com/tauri-apps/tao).
+[tao](https://github.com/tauri-apps/tao), with updates powered by
+[Sparkle](https://sparkle-project.org/).

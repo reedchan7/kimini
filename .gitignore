@@ -4,6 +4,7 @@
 .codegraph
 .tmp
 .scratch
+.sparkle
 docs/superpowers
 target
 dist

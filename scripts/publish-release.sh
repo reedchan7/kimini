@@ -10,6 +10,9 @@ cd "$ROOT"
 
 PACKAGE_SH="$ROOT/scripts/package-macos.sh"
 DIST="${DIST:-$ROOT/dist}"
+SPARKLE_ROOT="${SPARKLE_ROOT:-$ROOT/.sparkle}"
+SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-kimini.reedchan7}"
+SIGN_SPARKLE_UPDATE="$ROOT/scripts/sign-sparkle-update.sh"
 
 SKIP_BUILD=0
 DRY_RUN=0
@@ -38,6 +41,9 @@ Options:
 Environment:
   DIST               Output directory (default: ./dist)
   GH_REPO            Override repo (default: gh remote resolution)
+  SPARKLE_ACCOUNT    Update signing keychain account (default: kimini.reedchan7)
+  SPARKLE_PRIVATE_KEY_FILE
+                     Optional exported Ed25519 private-key file for signing
 
 Examples:
   make publish-release
@@ -106,7 +112,7 @@ if [[ -z "$TITLE" ]]; then
   TITLE="Kimini ${TAG}"
 fi
 
-ARTIFACTS=(
+PACKAGES=(
   "${DIST}/Kimini-${VERSION}-macos-aarch64.dmg"
   "${DIST}/Kimini-${VERSION}-macos-aarch64.zip"
   "${DIST}/Kimini-Web-${VERSION}-macos-aarch64.dmg"
@@ -116,6 +122,13 @@ ARTIFACTS=(
   "${DIST}/Kimini-Web-${VERSION}-macos-x86_64.dmg"
   "${DIST}/Kimini-Web-${VERSION}-macos-x86_64.zip"
 )
+UPDATE_FEEDS=(
+  "${DIST}/Kimini-macos-aarch64.xml"
+  "${DIST}/Kimini-Web-macos-aarch64.xml"
+  "${DIST}/Kimini-macos-x86_64.xml"
+  "${DIST}/Kimini-Web-macos-x86_64.xml"
+)
+ARTIFACTS=("${PACKAGES[@]}" "${UPDATE_FEEDS[@]}")
 
 echo "==> version ${VERSION}  tag ${TAG}"
 echo "    title: ${TITLE}"
@@ -147,7 +160,7 @@ else
 fi
 
 missing=0
-for f in "${ARTIFACTS[@]}"; do
+for f in "${PACKAGES[@]}"; do
   if [[ ! -f "$f" ]]; then
     echo "error: missing artifact: $f" >&2
     missing=1
@@ -157,6 +170,51 @@ if [[ "$missing" -ne 0 ]]; then
   echo "hint: run without --skip-build, or fix DIST/VERSION" >&2
   exit 1
 fi
+
+bash "$ROOT/scripts/fetch-sparkle.sh"
+if [[ ! -x "$SIGN_SPARKLE_UPDATE" ]]; then
+  echo "error: Sparkle signing helper missing: $SIGN_SPARKLE_UPDATE" >&2
+  exit 1
+fi
+
+PUB_DATE="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+
+generate_update_feed() {
+  local app_title="$1"
+  local artifact_name="$2"
+  local arch="$3"
+  local archive="${DIST}/${artifact_name}-${VERSION}-macos-${arch}.zip"
+  local feed="${DIST}/${artifact_name}-macos-${arch}.xml"
+  local signature
+  signature="$("$SIGN_SPARKLE_UPDATE" "$archive")"
+
+  printf '%s\n' \
+    '<?xml version="1.0" encoding="utf-8"?>' \
+    '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">' \
+    '  <channel>' \
+    "    <title>${app_title} updates</title>" \
+    '    <link>https://github.com/reedchan7/kimini/releases</link>' \
+    '    <description>Secure macOS updates for Kimini.</description>' \
+    '    <language>en</language>' \
+    '    <item>' \
+    "      <title>${app_title} ${VERSION}</title>" \
+    "      <link>https://github.com/reedchan7/kimini/releases/tag/${TAG}</link>" \
+    "      <sparkle:version>${VERSION}</sparkle:version>" \
+    "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" \
+    '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>' \
+    "      <pubDate>${PUB_DATE}</pubDate>" \
+    "      <enclosure url=\"https://github.com/reedchan7/kimini/releases/download/${TAG}/$(basename "$archive")\" ${signature} type=\"application/octet-stream\"/>" \
+    '    </item>' \
+    '  </channel>' \
+    '</rss>' > "$feed"
+  xmllint --noout "$feed"
+}
+
+echo "==> sign update archives and generate appcasts"
+generate_update_feed "Kimini" "Kimini" "aarch64"
+generate_update_feed "Kimini Web" "Kimini-Web" "aarch64"
+generate_update_feed "Kimini" "Kimini" "x86_64"
+generate_update_feed "Kimini Web" "Kimini-Web" "x86_64"
 
 echo "==> artifacts"
 ls -lh "${ARTIFACTS[@]}"
