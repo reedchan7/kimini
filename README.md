@@ -1,202 +1,143 @@
 <div align="center">
 
-<img src="docs/brand/exports/app-icon-128.png" width="128" height="128" alt="Kimini app icon"/>
+<img src="docs/brand/exports/app-icon-128.png" width="112" height="112" alt="Kimini app icon"/>
 
 # Kimini
 
-**Native Kimi Code, with the Web fallback intact.**
+**A native macOS GUI for Kimi Code — with the Web experience one app away.**
 
-A Rust 2024 desktop client for [Kimi Code](https://github.com/MoonshotAI/kimi-code).
+[English](README.md) · [简体中文](README_CN.md)
 
-<a href="https://github.com/reedchan7/kimini/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/reedchan7/kimini/ci.yml?branch=main&style=flat-square&label=CI&logo=github" alt="CI"/></a>
-<a href="https://github.com/reedchan7/kimini/releases/latest"><img src="https://img.shields.io/github/v/release/reedchan7/kimini?style=flat-square&logo=github&color=4A90D9" alt="Release"/></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License MIT"/></a>
+<a href="https://github.com/reedchan7/kimini/releases/latest"><img src="https://img.shields.io/badge/version-0.3.0-4A90D9?style=flat-square&logo=github" alt="Version 0.3.0"/></a>
+<a href="#compatibility-and-release-facts"><img src="https://img.shields.io/badge/core%20coverage-97.03%25-brightgreen?style=flat-square&logo=rust" alt="Core coverage 97.03%"/></a>
+<a href="#compatibility-and-release-facts"><img src="https://img.shields.io/badge/local%20tests-186%20passed-brightgreen?style=flat-square&logo=rust" alt="186 local tests passed"/></a>
 <img src="https://img.shields.io/badge/platform-macOS%2014%2B-black?style=flat-square&logo=apple&logoColor=white" alt="macOS 14+"/>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"/></a>
 
 </div>
 
-Kimini ships two independent applications that can be installed and run side
-by side:
+![Kimini 0.3 native conversation UI](docs/screenshots/kimini-native-overview.png)
 
-| Application | Purpose | Permanent renderer |
+Kimini 0.3 turns the local [Kimi Code](https://github.com/MoonshotAI/kimi-code)
+workflow into a focused GPUI desktop application. It connects directly to the
+Kimi daemon, keeps your existing sessions, and leaves the official Web workflow
+available through a separate companion app.
+
+## Choose your app
+
+| | **Kimini** | **Kimini Web** |
 |---|---|---|
-| **Kimini** | Native Kimi Code GUI | GPUI / Metal |
-| **Kimini Web** | Complete compatibility surface | System WKWebView |
+| Best for | Daily native workflow | Browser UI compatibility |
+| Interface | GPUI + Metal | Kimi Code Web in system WKWebView |
+| Connection | Typed REST + WebSocket | Daemon-served Web UI |
+| Renderer | No permanent browser renderer | WebKit process family |
+| Bundle | **14.1 MiB** | **1.8 MiB** |
 
-Both applications discover the same local Kimi daemon and use the same session
-data. The native client talks directly to the daemon's typed REST and WebSocket
-contracts; it does not wrap Kimi Code Web or scrape CLI/TUI output.
+Install both. They run side by side against the same local daemon and session
+store.
 
-> [!IMPORTANT]
-> The native application is a functional alpha. Its end-to-end G0 path and
-> selected G1/G2 product surfaces are implemented, including session lifecycle,
-> grouped tool traces, files, tasks, goals, skills, side chat, and daemon-backed
-> terminals. Formal long-session, packaged CJK, accessibility, and matched
-> performance acceptance remain open. Kimini Web stays available as the complete
-> compatibility surface throughout native parity work.
+## Why Kimini
 
-## Architecture
+- **Native where it matters.** Conversation, composer, sessions, settings, and
+  coding surfaces are rendered with GPUI and Metal.
+- **Your Kimi workflow stays intact.** Kimini discovers or starts the local
+  daemon and uses its authenticated `/api/v1` REST and WebSocket contracts.
+- **Web compatibility stays close.** Kimini Web preserves the daemon-served
+  browser interface for features that still need exact Web behavior.
+- **Coding work is first class.** Files, search, previews, git state, tasks,
+  skills, goals, side chats, approvals, prompt queues, and terminal tabs live in
+  one desktop workspace.
+- **Browser cost is on demand.** The native app creates its human-preview
+  WKWebView only when you open Browser and destroys the view when closed.
 
-```text
-Kimi daemon
-  ├── REST snapshots and commands
-  └── journaled WebSocket events
-          ↓
-protocol → model reducer → cached presentation → GPUI views
-    ↑             ↓
- typed API   user commands
+Compared with a broad agent environment such as
+[Codex](https://openai.com/index/introducing-the-codex-app/), Kimini is
+purpose-built for people already using Kimi Code: one daemon, one session
+history, and a choice of native or Web desktop surfaces. Model quality and
+cross-product performance are outside this comparison.
 
-On demand only:
-GPUI browser slot → bounded WRY child WKWebView
-Future agent use  → isolated Chromium browser broker / MCP / CDP
-```
+## Quick start
 
-The source is split by responsibility:
-
-- `src/protocol/` — tolerant wire DTOs and cursor/control contracts.
-- `src/model/` — deterministic session reducer with no GUI or network code.
-- `src/api/` — local REST client and bounded WebSocket event worker.
-- `src/daemon/` — discovery, health probing, token loading, and startup.
-- `src/native/` — GPUI composition, presentation cache, views, and browser host.
-- `src/legacy_web/` — isolated Kimini Web compatibility application.
-
-## Native alpha
-
-The current native path includes:
-
-- zero-configuration local daemon discovery and startup;
-- typed session list, snapshot, prompt, abort, approval, and question requests;
-- paginated session search plus create, rename, archive, restore, fork, compact,
-  undo, and diagnostic export flows;
-- sequence/epoch cursor handling, duplicate suppression, and authoritative
-  snapshot reload after cursor gaps or socket closure;
-- UTF-16 stream offsets, step-relative stream resets, subagent isolation, and
-  unknown-event tolerance;
-- bounded lossless event delivery from a dedicated WebSocket worker;
-- variable-height conversation virtualization and cached transcript projection;
-- native composer with attachments, slash commands, skills, queued prompts,
-  steering, runtime modes, goals, streaming output, approvals, and multi-part
-  questions;
-- compact grouped tool traces and a dedicated thinking-preview pane modeled on
-  the Kimi Code Web information hierarchy;
-- workspace file browsing, search, previews, git state, and diff summaries;
-- background task/subagent rosters, isolated BTW side chats, and daemon-first
-  terminal tabs with VT output, replay, resize, command input, and close;
-- a local Rust PTY fallback that preserves the terminal workflow when a
-  packaged Kimi daemon cannot load its native PTY backend;
-- managed authentication state and English/Simplified Chinese host UI;
-- AccessKit roles, labels, focus traversal, and native CJK input plumbing;
-- a rectangular WRY child view that is created only after an explicit browser
-  action and destroyed when closed.
-
-The embedded browser is for human preview and OAuth. Deterministic model-driven
-browsing remains a separate future subsystem with an isolated Chromium profile,
-MCP/CDP control, explicit takeover, and independent permissions.
-
-WKWebView has an important lifecycle constraint: closing the child view removes
-its WebContent process, while macOS may retain pooled GPU and Networking helpers
-until the host exits. Work that requires complete browser-process teardown must
-run in the isolated browser companion process.
-
-## Install
-
-**Requires:** macOS 14+ and the
-[Kimi Code](https://github.com/MoonshotAI/kimi-code) CLI.
+Requires macOS 14+ and Kimi Code.
 
 ```sh
-npm install -g @moonshot-ai/kimi-code
+curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+kimi login
 ```
 
-Release assets are named separately:
+Download the matching architecture from
+[Releases](https://github.com/reedchan7/kimini/releases/latest):
 
-- `Kimini-<version>-macos-<arch>` — native GPUI application.
-- `Kimini-Web-<version>-macos-<arch>` — Web compatibility application.
+- `Kimini-<version>-macos-<arch>` — native GPUI app
+- `Kimini-Web-<version>-macos-<arch>` — Web compatibility app
 
-Builds are currently ad-hoc signed. The first launch may require right-clicking
-the app and choosing **Open**.
+Current builds are ad-hoc signed. On first launch, right-click the app and
+choose **Open** if macOS blocks it.
 
-## Run from source
+Kimini reads `~/.kimi-code/server/lock` and `server.token`, health-probes the
+daemon, and starts `kimi server run` when needed. Credentials stay in request
+headers or the WebSocket subprotocol; they are not placed in browser URLs.
+
+## Native experience
+
+The 0.3 release includes session creation, search, rename, archive/restore,
+fork, compact, undo, attachments, streaming, thinking and tool traces,
+approvals and questions, runtime modes, files, tasks, skills, goals, side chat,
+terminal tabs, authentication, English/Chinese UI, themes, and keyboard-first
+navigation.
+
+<details>
+<summary><strong>Settings, appearance, language, account, and agent defaults</strong></summary>
+
+![Kimini native settings](docs/screenshots/kimini-native-settings.png)
+
+</details>
+
+| Shortcut | Surface |
+|---|---|
+| `⌘⇧E` | Files |
+| `⌘⇧K` | Skills |
+| `⌘J` | Terminal |
+| `⌘⇧T` | Tasks |
+
+## Compatibility and release facts
+
+- Direct daemon integration uses the self-described Kimi Code REST and
+  WebSocket protocols; it does not scrape CLI/TUI output.
+- Kimini Web remains an independent application and uses the same sessions and
+  authentication as `kimi web`.
+- The native terminal prefers the daemon backend and retains a local Rust PTY
+  fallback when the packaged daemon cannot load its PTY module.
+- Both 0.3.0 arm64 app bundles build and run together. The release bundles are
+  14.1 MiB native and 1.8 MiB Web on the current build machine.
+- Protocol and pure state logic currently have **97.03% line coverage**. The
+  local native/Web release suite contains **186 automated tests**.
+
+The native app is an early release. Packaged CJK composition, long-session
+performance, streaming accessibility, rich media, and complete interactive
+terminal behavior are still being hardened. Matched CPU and memory results will
+be published after the full process-family benchmark is complete.
+
+## Build from source
 
 ```sh
-make run                         # Native Kimini
-make run-web                     # Kimini Web, automatic daemon discovery
-make run-web URL='http://127.0.0.1:58627/#token=<daemon-token>'
-
-# Open a human-browser URL with the native app for integration work
-KIMINI_BROWSER_URL='https://example.com' make run
+make run          # native app
+make run-web      # Web compatibility app
+make apps         # both .app bundles in dist/
+make package-all  # both architectures, DMG + zip
 ```
 
-Native startup resolves the daemon from `~/.kimi-code/server/lock` and
-`server.token`, health-probes it, and starts `kimi server run` when needed.
-Bearer tokens remain in headers or the WebSocket subprotocol and never enter
-the native browser URL, logs, or rendered state.
-
-Native workspace shortcuts are `Cmd+Shift+E` for files, `Cmd+Shift+K` for
-skills, `Cmd+J` for the terminal, and `Cmd+Shift+T` for tasks.
-
-## Build and package
-
-```sh
-make build        # Native debug binary
-make build-web    # Web compatibility debug binary
-make apps         # dist/Kimini.app + dist/Kimini Web.app
-make package-all  # both apps, both macOS architectures, DMG + zip
-make lint
-make test
-make coverage-core
-```
-
-`coverage-core` enforces at least 90% line coverage for the protocol and pure
-application-state core. Platform glue is exercised through real daemon, real
-window, accessibility-tree, browser-lifecycle, and packaged-app scenarios.
-
-## Kimini Web measured footprint
-
-The following measurements apply to the **Kimini Web** compatibility app, not
-the native G0 client. Controlled runs used an M5 Max / macOS 26.5.2, Kimini Web
-0.1.0, Chrome 150.0.7871.128, the same local Kimi daemon and session data, and a
-roughly 1440 × 900 content area. Samples were collected at 1 Hz over 30–45 s
-windows for the complete client process family; the shared daemon was excluded.
-
-**Memory** — physical footprint, MiB, median / P95:
-
-| Scenario | Kimini Web | Chrome | Delta |
-|---|---:|---:|---:|
-| Idle · long session · 120 Hz | **501 / 501** | 517 / 667 | -3% / -25% |
-| Scroll · long session · 120 Hz | **629 / 885** | 716 / 908 | -12% / -3% |
-| Streamed response · 120 Hz | **520 / 522** | 622 / 798 | -16% / -35% |
-
-**CPU** — process-family sum, percent of one core, mean / P95:
-
-| Scenario | Kimini Web | Chrome | Delta mean |
-|---|---:|---:|---:|
-| Idle · long session · 120 Hz | 11.1 / 18.2 | **7.0 / 14.5** | +60% |
-| Scroll · long session · 120 Hz | 18.7 / 37.9 | **11.0 / 22.6** | +70% |
-| Streamed response · 120 Hz | 19.0 / 33.4 | **13.0 / 31.5** | +47% |
-| Idle · default view · 120 Hz | **6.1 / 10.3** | 12.8 / 30.1 | -53% |
-| Idle · default view · 60 Hz | **3.7 / 6.2** | 10.2 / 25.2 | -64% |
-
-The long-session and default-view rows differ because the web page has a
-persistent animation and repaint cost scales with view complexity and refresh
-rate. These figures motivated the native renderer; they are not evidence for a
-native performance win. Native results will be published only after matched
-short-, long-, streaming-, and browser-lifecycle runs cover every process.
-
-## Notes
-
-- Native GUI dependencies track Zed GPUI and gpui-component through exact
-  `Cargo.lock` revisions because current AccessKit support is newer than the
-  crates.io GPUI release.
-- `wry 0.55` and `tao 0.34` remain paired for the Web compatibility app.
-- macOS is the first target. Windows and Linux require separate input,
-  accessibility, child-surface, and packaging acceptance.
-- The project is unofficial and is not affiliated with Moonshot AI.
+See the [native GUI specification](docs/native-gui-spec.md) and
+[framework decision](docs/native-gui-framework-selection.md) for deeper design
+and performance methodology.
 
 ---
 
-[MIT](LICENSE) · Built with
-[GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui),
+Community-built and independent. Kimi and Kimi Code are products of Moonshot
+AI. Kimini is not affiliated with Moonshot AI.
+
+[MIT](LICENSE) · [Issues](https://github.com/reedchan7/kimini/issues) · Built
+with [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui),
 [gpui-component](https://github.com/longbridge/gpui-component),
-[wry](https://github.com/tauri-apps/wry),
-[tao](https://github.com/tauri-apps/tao), and
-[muda](https://github.com/tauri-apps/muda).
+[wry](https://github.com/tauri-apps/wry), and
+[tao](https://github.com/tauri-apps/tao).

@@ -6,7 +6,7 @@ Only assets used by packaging and docs stay in-tree.
 |------|-----|
 | `exports/app-icon-1024.png` | **Master** app icon → `AppIcon.icns` via `scripts/package-macos.sh` |
 | `exports/app-icon-256.png` | Docs / previews |
-| `exports/app-icon-128.png` | README hero (light) |
+| `exports/app-icon-128.png` | README hero |
 
 Generated (gitignored): `packaging/macos/AppIcon.icns` — rebuilt when the master PNG is newer.
 
@@ -19,10 +19,11 @@ Do not recolor toward hard KMBlue, enlarge eyes, or add teary effects.
 
 ## Concept
 
-**Kimini** is a lightweight browser shell for **Kimi Code**. The mark is a soft
-periwinkle-blue plush “face cube” sitting in a browser window — mini shell,
-mini buddy. Inspired by Kimi Code’s product face mark (blue tile + two eyes),
-with Kimini’s own softer palette and window framing.
+**Kimini** is a native desktop client for **Kimi Code**, paired with a separate
+Web compatibility app. The mark is a soft periwinkle-blue plush “face cube” in
+a desktop window — a compact companion for the local Kimi workflow. It keeps
+Kimini’s softer palette and window framing while remaining distinct from Kimi
+Code’s product mark.
 
 Not a letter-K monogram (that’s the main Kimi app mark).
 
