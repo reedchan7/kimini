@@ -26,6 +26,9 @@ mod view;
 gpui::actions!(
     kimini,
     [
+        About,
+        CheckForUpdates,
+        CloseWindow,
         FocusNext,
         FocusPrevious,
         FocusSessionSearch,
@@ -47,6 +50,13 @@ gpui::actions!(
         ToggleSideChat,
         ToggleBrowser,
         ToggleSidebar,
+        Hide,
+        HideOthers,
+        Minimize,
+        OpenSettings,
+        Quit,
+        ShowAll,
+        Zoom,
         SessionSearchNext,
         SessionSearchPrevious,
         CloseSessionSearch

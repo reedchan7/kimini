@@ -3,6 +3,7 @@ use gpui::{Context, Window};
 use crate::i18n::{Lang, save_preference};
 
 use super::super::app::Shell;
+use super::super::shell::install_app_menus;
 
 impl Shell {
     pub(in crate::native) fn toggle_language(
@@ -15,6 +16,7 @@ impl Shell {
             Lang::Zh => Lang::En,
         };
         self.strings = self.lang.strings();
+        install_app_menus(&self.strings, cx);
         let strings = self.strings.native;
         self.composer.update(cx, |input, cx| {
             input.set_placeholder(strings.ask_placeholder, window, cx)

@@ -30,14 +30,17 @@ mod toolbar;
 use gpui::{Context, IntoElement, Render, Role, Window, div, prelude::*};
 use gpui_component::input::Escape as InputEscape;
 
-use super::app::{Shell, UtilityPanel};
+use crate::updater::LATEST_RELEASE_URL;
+
+use super::app::{SettingsTab, Shell, UtilityPanel};
 use super::theme::*;
 use super::{
-    ArchiveSession, CloseSessionSearch, CompactSession, ExportSession, FocusNext, FocusPrevious,
-    FocusSessionSearch, ForkSession, NewSession, RenameSession, SessionSearchNext,
-    SessionSearchPrevious, SetModel, SetPermission, SetThinking, SteerPrompt, ToggleBrowser,
-    ToggleFiles, ToggleGoalMode, TogglePlanMode, ToggleSideChat, ToggleSidebar, ToggleSkills,
-    ToggleSwarmMode, ToggleTasks, ToggleTerminal, UndoSession,
+    About, ArchiveSession, CheckForUpdates, CloseSessionSearch, CloseWindow, CompactSession,
+    ExportSession, FocusNext, FocusPrevious, FocusSessionSearch, ForkSession, Minimize, NewSession,
+    OpenSettings, RenameSession, SessionSearchNext, SessionSearchPrevious, SetModel, SetPermission,
+    SetThinking, SteerPrompt, ToggleBrowser, ToggleFiles, ToggleGoalMode, TogglePlanMode,
+    ToggleSideChat, ToggleSidebar, ToggleSkills, ToggleSwarmMode, ToggleTasks, ToggleTerminal,
+    UndoSession, Zoom,
 };
 
 impl Render for Shell {
@@ -48,6 +51,22 @@ impl Render for Shell {
             .id("kimini-root")
             .role(Role::Application)
             .aria_label("Kimini")
+            .on_action(
+                cx.listener(|this, _: &About, _, cx| {
+                    this.open_auth_panel(SettingsTab::Advanced, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| {
+                this.open_auth_panel(SettingsTab::General, cx)
+            }))
+            .on_action(cx.listener(|this, _: &CheckForUpdates, _, cx| {
+                if !this.updater.check_now() {
+                    cx.open_url(LATEST_RELEASE_URL);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|_, _: &Minimize, window, _| window.minimize_window()))
+            .on_action(cx.listener(|_, _: &Zoom, window, _| window.zoom_window()))
             .on_action(cx.listener(|_, _: &FocusNext, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &FocusPrevious, window, cx| window.focus_prev(cx)))
             .on_action(cx.listener(|this, _: &InputEscape, _, cx| {
