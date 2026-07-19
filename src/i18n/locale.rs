@@ -68,24 +68,12 @@ impl Lang {
 }
 
 pub(crate) fn config_dir() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = env::var_os("HOME")?;
-        Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("Kimini"),
-        )
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Some(xdg) = env::var_os("XDG_CONFIG_HOME") {
-            return Some(PathBuf::from(xdg).join("kimini"));
-        }
-        let home = env::var_os("HOME")?;
-        Some(PathBuf::from(home).join(".config").join("kimini"))
-    }
+    #[cfg(target_os = "linux")]
+    const DIRECTORY_NAME: &str = "kimini";
+    #[cfg(not(target_os = "linux"))]
+    const DIRECTORY_NAME: &str = "Kimini";
+
+    Some(dirs::config_dir()?.join(DIRECTORY_NAME))
 }
 
 fn preference_path() -> Option<PathBuf> {

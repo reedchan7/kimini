@@ -1,34 +1,36 @@
 use std::env;
+#[cfg(unix)]
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
 pub(super) fn resolve_kimi() -> Option<PathBuf> {
-    let from_path = env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths)
-            .map(|directory| directory.join("kimi"))
-            .find(|candidate| is_executable(candidate))
-    });
-    from_path
+    which::which("kimi")
+        .ok()
         .or_else(resolve_known_location)
         .or_else(login_shell_which)
 }
 
 fn resolve_known_location() -> Option<PathBuf> {
-    let home = env::var_os("HOME").map(PathBuf::from);
-    let mut candidates = home
+    let home = dirs::home_dir();
+    let executable = format!("kimi{}", env::consts::EXE_SUFFIX);
+    let candidates = home
         .iter()
         .flat_map(|home| {
             [
-                home.join(".kimi-code/bin/kimi"),
-                home.join(".local/bin/kimi"),
-                home.join(".bun/bin/kimi"),
-                home.join(".volta/bin/kimi"),
+                home.join(".kimi-code/bin").join(&executable),
+                home.join(".local/bin").join(&executable),
+                home.join(".bun/bin").join(&executable),
+                home.join(".volta/bin").join(&executable),
             ]
         })
         .collect::<Vec<_>>();
-    candidates.extend(["/opt/homebrew/bin/kimi", "/usr/local/bin/kimi"].map(PathBuf::from));
+    #[cfg(unix)]
+    let candidates = candidates
+        .into_iter()
+        .chain(["/opt/homebrew/bin/kimi", "/usr/local/bin/kimi"].map(PathBuf::from))
+        .collect::<Vec<_>>();
     candidates
         .into_iter()
         .find(|candidate| is_executable(candidate))

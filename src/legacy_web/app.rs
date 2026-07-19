@@ -7,7 +7,9 @@
 //! Launched with no URL, it discovers (or starts) the local kimi daemon and
 //! connects with the persisted token — zero configuration (see `daemon`).
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
+#[cfg(target_os = "macos")]
+use std::cell::RefCell;
 use std::env;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,11 +17,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
+#[cfg(target_os = "linux")]
+use tao::platform::unix::WindowExtUnix;
 use tao::window::{WindowBuilder, WindowId};
+#[cfg(target_os = "linux")]
+use wry::WebViewBuilderExtUnix;
 use wry::{NewWindowResponse, WebViewBuilder};
 
 use crate::daemon;
-use crate::i18n::{self, Lang};
+#[cfg(target_os = "macos")]
+use crate::i18n;
+use crate::i18n::Lang;
 #[cfg(target_os = "macos")]
 use crate::updater::{LATEST_RELEASE_URL, Updater};
 
@@ -55,22 +63,17 @@ pub(super) enum UserEvent {
 
 /// External links are handed to the system browser; the shell never follows them.
 fn open_external(raw: &str) {
-    #[cfg(target_os = "macos")]
-    let cmd = std::process::Command::new("open").arg(raw).spawn();
-    #[cfg(target_os = "linux")]
-    let cmd = std::process::Command::new("xdg-open").arg(raw).spawn();
-    #[cfg(target_os = "windows")]
-    let cmd = std::process::Command::new("cmd")
-        .args(["/c", "start", "", raw])
-        .spawn();
-    let _ = cmd;
+    if let Err(error) = open::that_detached(raw) {
+        eprintln!("kimini: failed to open external URL: {error}");
+    }
 }
 
+#[cfg(target_os = "macos")]
 fn apply_language(
     next: Lang,
     lang_cell: &Cell<Lang>,
-    #[cfg(target_os = "macos")] menu_slot: &RefCell<Option<muda::Menu>>,
-    #[cfg(target_os = "macos")] settings_slot: &RefCell<Option<settings::SettingsWindow>>,
+    menu_slot: &RefCell<Option<muda::Menu>>,
+    settings_slot: &RefCell<Option<settings::SettingsWindow>>,
 ) {
     if next == lang_cell.get() {
         return;
@@ -81,16 +84,14 @@ fn apply_language(
     }
     eprintln!("kimini: lang={}", next.code());
 
-    #[cfg(target_os = "macos")]
-    {
-        *menu_slot.borrow_mut() = None;
-        *menu_slot.borrow_mut() = Some(menu::install(&next.strings()));
-        settings::refresh(settings_slot, next);
-    }
+    *menu_slot.borrow_mut() = None;
+    *menu_slot.borrow_mut() = Some(menu::install(&next.strings()));
+    settings::refresh(settings_slot, next);
 }
 
 pub fn run() -> wry::Result<()> {
     let lang = Lang::resolve();
+    #[cfg(target_os = "macos")]
     let strings = lang.strings();
     eprintln!("kimini: lang={}", lang.code());
 
@@ -175,6 +176,9 @@ pub fn run() -> wry::Result<()> {
         builder.with_data_store_identifier(DATA_STORE_ID)
     };
 
+    #[cfg(target_os = "linux")]
+    let webview = builder.build_gtk(window.gtk_window())?;
+    #[cfg(not(target_os = "linux"))]
     let webview = builder.build(&window)?;
 
     // Zero-config: discover (or start) the daemon off the UI thread; the
@@ -196,6 +200,8 @@ pub fn run() -> wry::Result<()> {
     }
 
     event_loop.run(move |event, target, control_flow| {
+        #[cfg(not(target_os = "macos"))]
+        let _ = target;
         *control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent {

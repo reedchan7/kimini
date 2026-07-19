@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Kimini Web
+Comment=Kimi Code Web compatibility client
+Exec=kimini-web
+Icon=io.github.reedchan7.KiminiWeb
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

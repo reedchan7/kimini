@@ -8,5 +8,4 @@ pub mod model;
 #[cfg(feature = "native")]
 pub mod native;
 pub mod protocol;
-#[cfg(target_os = "macos")]
 pub mod updater;

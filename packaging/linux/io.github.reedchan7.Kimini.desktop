@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Kimini
+Comment=Native Kimi Code desktop client
+Exec=kimini
+Icon=io.github.reedchan7.Kimini
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

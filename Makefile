@@ -48,7 +48,8 @@ PUBLISH_FLAGS ?=
         check test coverage-core fmt fmt-check clippy lint clean clean-dist size \
         install uninstall doctor \
         app app-native app-web apps dmg dmg-web zip zip-web package-all \
-        publish-release sparkle install-app install-web-app \
+        package-linux package-linux-native package-windows publish-release \
+        publish-release-all sparkle install-app install-web-app \
         uninstall-app uninstall-web-app uninstall-all \
         open-app open-web-app
 
@@ -94,7 +95,9 @@ help: ## Show this help
 	@printf '    make app && make install-app\n'
 	@printf '    make dmg && make zip\n'
 	@printf '    make package-all\n'
+	@printf '    make package-linux\n'
 	@printf '    make publish-release\n'
+	@printf '    make publish-release-all\n'
 	@printf '    make publish-release PUBLISH_FLAGS=--dry-run\n'
 	@printf '    make lint\n\n'
 
@@ -172,6 +175,26 @@ package-all: ## Build aarch64 + x86_64 DMG and zip into dist/
 publish-release: ## Local dual-arch package + GitHub Release (version from Cargo.toml)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release requires macOS"; exit 1; }
 	bash ./$(PUBLISH_SH) $(PUBLISH_FLAGS)
+
+publish-release-all: ## Publish a strict macOS + Linux + staged Windows asset matrix
+	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release-all coordinator requires macOS"; exit 1; }
+	bash ./$(PUBLISH_SH) --include-portable $(PUBLISH_FLAGS)
+
+# ---------------------------------------------------------------------------
+# Linux / Windows portable packages
+# ---------------------------------------------------------------------------
+##@ Linux / Windows
+
+package-linux: ## Build Linux x86_64 + ARM64 archives through Docker
+	bash ./scripts/package-linux-docker.sh --arch all
+
+package-linux-native: ## Build Linux archives on the current Linux host
+	bash ./scripts/package-linux.sh --app all
+
+package-windows: ## Build Windows x86_64 + ARM64 archives in Developer PowerShell
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/package-windows.ps1 -App all -Arch all
+
+##@ macOS Install
 
 install-app: ## Package and install .app to INSTALL_DIR (default: ~/Applications)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: install-app requires macOS"; exit 1; }

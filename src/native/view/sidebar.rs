@@ -2,7 +2,7 @@ use gpui::{Context, IntoElement, Role, div, img, list, prelude::*, px};
 use gpui_component::{Icon, IconName, Sizable as _, StyledExt, scroll::ScrollableElement};
 
 use super::super::app::Shell;
-use super::super::shell::APP_ICON_PATH;
+use super::super::shell::{APP_ICON_PATH, PRIMARY_MODIFIER_LABEL};
 use super::super::theme::*;
 
 impl Shell {
@@ -298,7 +298,7 @@ fn search_shortcut_hint() -> impl IntoElement {
         .flex()
         .items_center()
         .gap_1()
-        .children(["⌘", "K"].map(|key| {
+        .children([PRIMARY_MODIFIER_LABEL, "K"].map(|key| {
             div()
                 .min_w(px(16.0))
                 .h(px(18.0))

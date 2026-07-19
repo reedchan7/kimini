@@ -1,0 +1,9 @@
+.git
+.github
+.sparkle
+.tmp
+.scratch
+dist
+target
+docs/research
+HANDOFF.md

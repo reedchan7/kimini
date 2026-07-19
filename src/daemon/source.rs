@@ -30,7 +30,7 @@ fn kimi_home() -> Option<PathBuf> {
     {
         return Some(PathBuf::from(directory));
     }
-    Some(PathBuf::from(env::var_os("HOME")?).join(".kimi-code"))
+    Some(dirs::home_dir()?.join(".kimi-code"))
 }
 
 fn parse_lock_origin(raw: &str) -> Option<String> {

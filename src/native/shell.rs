@@ -19,6 +19,10 @@ const WINDOW_WIDTH: f32 = 1440.0;
 const WINDOW_HEIGHT: f32 = 900.0;
 pub(super) const APP_ICON_PATH: &str = "images/kimini-app-icon.png";
 pub(super) const ATTACHMENT_ICON_PATH: &str = "icons/kimini-paperclip.svg";
+#[cfg(target_os = "macos")]
+pub(super) const PRIMARY_MODIFIER_LABEL: &str = "⌘";
+#[cfg(not(target_os = "macos"))]
+pub(super) const PRIMARY_MODIFIER_LABEL: &str = "Ctrl";
 
 struct KiminiAssets;
 
@@ -57,15 +61,15 @@ pub(super) fn run() {
         cx.bind_keys([
             KeyBinding::new("tab", FocusNext, None),
             KeyBinding::new("shift-tab", FocusPrevious, None),
-            KeyBinding::new("cmd-k", FocusSessionSearch, None),
-            KeyBinding::new("cmd-n", NewSession, None),
+            KeyBinding::new("secondary-k", FocusSessionSearch, None),
+            KeyBinding::new("secondary-n", NewSession, None),
             KeyBinding::new("ctrl-s", SteerPrompt, None),
-            KeyBinding::new("cmd-shift-e", ToggleFiles, None),
-            KeyBinding::new("cmd-shift-k", ToggleSkills, None),
-            KeyBinding::new("cmd-j", ToggleTerminal, None),
-            KeyBinding::new("cmd-shift-t", ToggleTasks, None),
-            KeyBinding::new("cmd-shift-b", ToggleBrowser, None),
-            KeyBinding::new("cmd-b", ToggleSidebar, None),
+            KeyBinding::new("secondary-shift-e", ToggleFiles, None),
+            KeyBinding::new("secondary-shift-k", ToggleSkills, None),
+            KeyBinding::new("secondary-j", ToggleTerminal, None),
+            KeyBinding::new("secondary-shift-t", ToggleTasks, None),
+            KeyBinding::new("secondary-shift-b", ToggleBrowser, None),
+            KeyBinding::new("secondary-b", ToggleSidebar, None),
             KeyBinding::new("down", SessionSearchNext, Some("SessionSearch")),
             KeyBinding::new("up", SessionSearchPrevious, Some("SessionSearch")),
             KeyBinding::new("escape", CloseSessionSearch, Some("SessionSearch")),

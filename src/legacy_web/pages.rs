@@ -1,6 +1,7 @@
 use crate::i18n::Lang;
 
 /// HTML for the Settings window (language preference).
+#[cfg(target_os = "macos")]
 pub fn settings_html(lang: Lang) -> String {
     let t = lang.strings();
     let en_checked = if lang == Lang::En { " checked" } else { "" };
@@ -258,6 +259,7 @@ pub fn launch_html(lang: Lang) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn settings_page_contains_both_language_options() {
         let html = settings_html(Lang::En);

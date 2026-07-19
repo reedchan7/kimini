@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use std::path::{Path, PathBuf};
 
 use gpui::Context;
@@ -41,6 +42,7 @@ impl Shell {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn sibling_web_bundle_for(executable: &Path) -> Option<PathBuf> {
     let macos = executable.parent()?;
     if macos.file_name()?.to_str()? != "MacOS" {
@@ -54,7 +56,7 @@ fn sibling_web_bundle_for(executable: &Path) -> Option<PathBuf> {
     app.parent().map(|parent| parent.join("Kimini Web.app"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 

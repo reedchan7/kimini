@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::Path;
 
 use gpui::{Anchor, Context, IntoElement, Role, Window, div, prelude::*, px};
 use gpui_component::{
@@ -221,8 +222,14 @@ impl Shell {
 }
 
 fn compact_workspace_path(path: &str) -> String {
-    std::env::var("HOME")
-        .ok()
-        .and_then(|home| path.strip_prefix(&home).map(|suffix| format!("~{suffix}")))
+    dirs::home_dir()
+        .and_then(|home| Path::new(path).strip_prefix(home).ok().map(Path::to_owned))
+        .map(|suffix| {
+            if suffix.as_os_str().is_empty() {
+                "~".to_owned()
+            } else {
+                format!("~{}{}", std::path::MAIN_SEPARATOR, suffix.display())
+            }
+        })
         .unwrap_or_else(|| path.to_owned())
 }

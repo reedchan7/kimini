@@ -40,9 +40,7 @@ impl Shell {
 }
 
 fn default_export_directory() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|home| home.join("Downloads"))
+    dirs::download_dir()
         .filter(|path| path.is_dir())
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| Path::new(".").to_owned())

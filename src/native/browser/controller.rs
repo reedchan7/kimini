@@ -72,6 +72,13 @@ impl Shell {
                 return;
             }
         };
+        #[cfg(target_os = "linux")]
+        if linux_wayland_session() {
+            cx.open_url(&url);
+            self.browser_error = None;
+            cx.notify();
+            return;
+        }
         match wry::WebViewBuilder::new()
             .with_url(&url)
             .build_as_child(window)
@@ -107,4 +114,11 @@ impl Shell {
             self.open_browser(window, cx);
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_wayland_session() -> bool {
+    std::env::var_os("WAYLAND_DISPLAY").is_some()
+        || std::env::var("XDG_SESSION_TYPE")
+            .is_ok_and(|value| value.eq_ignore_ascii_case("wayland"))
 }

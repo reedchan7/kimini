@@ -238,10 +238,48 @@ fn pty_size(cols: usize, rows: usize) -> PtySize {
 }
 
 fn preferred_shell() -> PathBuf {
+    ["KIMINI_SHELL_PATH", "KIMI_SHELL_PATH"]
+        .into_iter()
+        .find_map(|name| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .filter(|shell| shell.is_file())
+        })
+        .or_else(platform_shell)
+        .unwrap_or_else(default_shell)
+}
+
+#[cfg(unix)]
+fn platform_shell() -> Option<PathBuf> {
     std::env::var_os("SHELL")
         .map(PathBuf::from)
         .filter(|shell| shell.is_file())
-        .unwrap_or_else(|| PathBuf::from("/bin/zsh"))
+}
+
+#[cfg(windows)]
+fn platform_shell() -> Option<PathBuf> {
+    which::which("pwsh")
+        .or_else(|_| which::which("powershell"))
+        .ok()
+        .or_else(|| {
+            std::env::var_os("COMSPEC")
+                .map(PathBuf::from)
+                .filter(|shell| shell.is_file())
+        })
+}
+
+#[cfg(unix)]
+fn default_shell() -> PathBuf {
+    ["/bin/zsh", "/bin/bash", "/bin/sh"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|shell| shell.is_file())
+        .unwrap_or_else(|| PathBuf::from("/bin/sh"))
+}
+
+#[cfg(windows)]
+fn default_shell() -> PathBuf {
+    PathBuf::from(r"C:\Windows\System32\cmd.exe")
 }
 
 fn now_millis() -> u128 {
@@ -252,10 +290,12 @@ fn now_millis() -> u128 {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn local_pty_executes_commands_and_reports_exit() {
         let mut host = LocalTerminalHost::default();
