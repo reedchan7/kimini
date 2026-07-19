@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, scroll::ScrollableElement, text::TextView};
 
 use crate::protocol::{Task, TaskKind, TaskStatus};
@@ -26,8 +26,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(self.task_panel_header(tasks.len(), running, cx))
             .child(
                 div()
@@ -41,11 +41,11 @@ impl Shell {
                                 .mb_3()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(BORDER_STRONG))
-                                .bg(rgb(ERROR_SOFT))
+                                .border_color(theme_rgb(BORDER_STRONG))
+                                .bg(theme_rgb(ERROR_SOFT))
                                 .p_2()
-                                .text_xs()
-                                .text_color(rgb(ERROR))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(ERROR))
                                 .child(error),
                         )
                     })
@@ -54,8 +54,8 @@ impl Shell {
                             div()
                                 .py_8()
                                 .text_center()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(if self.tasks_loading {
                                     self.strings.native.tasks_loading
                                 } else {
@@ -86,20 +86,20 @@ impl Shell {
             .justify_between()
             .px_3()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .font_semibold()
                     .child(self.strings.native.tasks)
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .font_normal()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(format!("{running}/{total}")),
                     ),
             )
@@ -130,12 +130,12 @@ impl Shell {
             .mb_3()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(if task.status == TaskStatus::Failed {
+            .border_color(theme_rgb(if task.status == TaskStatus::Failed {
                 ERROR
             } else {
                 BORDER
             }))
-            .bg(rgb(CANVAS))
+            .bg(theme_rgb(CANVAS))
             .p_3()
             .child(
                 div()
@@ -145,32 +145,40 @@ impl Shell {
                     .gap_2()
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .font_semibold()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(kind),
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(rgb(status_color(task.status)))
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(status_color(task.status)))
                             .child(status),
                     ),
             )
             .child(
                 div()
                     .mt_2()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .font_semibold()
                     .child(task.description.clone()),
             )
             .when_some(task.command.clone(), |card, command| {
                 card.child(
-                    div().mt_2().rounded_md().bg(rgb(SURFACE)).p_2().child(
-                        TextView::markdown(("task-command", index), format!("```\n{command}\n```"))
+                    div()
+                        .mt_2()
+                        .rounded_md()
+                        .bg(theme_rgb(SURFACE))
+                        .p_2()
+                        .child(
+                            TextView::markdown(
+                                ("task-command", index),
+                                format!("```\n{command}\n```"),
+                            )
                             .selectable(true)
-                            .text_xs(),
-                    ),
+                            .text_size(font_px(12.0)),
+                        ),
                 )
             })
             .when_some(task.output_preview.clone(), |card, output| {
@@ -180,12 +188,12 @@ impl Shell {
                         .max_h(px(180.0))
                         .overflow_y_scrollbar()
                         .rounded_md()
-                        .bg(rgb(SURFACE))
+                        .bg(theme_rgb(SURFACE))
                         .p_2()
                         .child(
                             TextView::markdown(("task-output", index), output)
                                 .selectable(true)
-                                .text_xs(),
+                                .text_size(font_px(12.0)),
                         ),
                 )
             })
@@ -219,7 +227,7 @@ fn task_status_label(status: TaskStatus, strings: crate::i18n::NativeStrings) ->
     }
 }
 
-fn status_color(status: TaskStatus) -> u32 {
+fn status_color(status: TaskStatus) -> ColorToken {
     match status {
         TaskStatus::Failed => ERROR,
         TaskStatus::Running => ACCENT,

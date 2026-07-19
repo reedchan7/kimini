@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*};
 use gpui_component::{StyledExt, text::TextView};
 
 use crate::protocol::MessageRole;
@@ -32,13 +32,15 @@ impl Shell {
                             .when(is_user, |body| {
                                 body.max_w(gpui::relative(0.82))
                                     .rounded_lg()
-                                    .bg(rgb(SURFACE_SUBTLE))
+                                    .bg(theme_rgb(SURFACE_SUBTLE))
                                     .px_3()
                                     .py_2()
                             })
                             .when(!is_user, |body| body.w_full())
                             .when(row.role == MessageRole::System, |body| {
-                                body.border_l_2().border_color(rgb(BORDER_STRONG)).pl_3()
+                                body.border_l_2()
+                                    .border_color(theme_rgb(BORDER_STRONG))
+                                    .pl_3()
                             })
                             .when(row.role == MessageRole::System || row.streaming, |body| {
                                 body.child(
@@ -49,7 +51,7 @@ impl Shell {
                                         .gap_2()
                                         .text_size(gpui::px(11.0))
                                         .font_semibold()
-                                        .text_color(rgb(TEXT_MUTED))
+                                        .text_color(theme_rgb(TEXT_MUTED))
                                         .child(speaker)
                                         .when(row.streaming, |header| {
                                             header
@@ -110,7 +112,7 @@ impl Shell {
             TranscriptBlock::Text(text) => {
                 TextView::markdown(("message-markdown", key), text.clone())
                     .selectable(true)
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .into_any_element()
             }
             TranscriptBlock::Thinking(text) => self.thinking_block(key, text, cx),
@@ -139,10 +141,10 @@ impl Shell {
             .aria_label(self.strings.native.preview_thinking)
             .cursor_pointer()
             .border_l_2()
-            .border_color(rgb(BORDER_STRONG))
+            .border_color(theme_rgb(BORDER_STRONG))
             .pl_3()
             .py_1()
-            .hover(|item| item.border_color(rgb(ACCENT)))
+            .hover(|item| item.border_color(theme_rgb(ACCENT)))
             .on_click(
                 cx.listener(move |this, _, _, cx| this.open_thinking_preview(text.clone(), cx)),
             )
@@ -154,7 +156,7 @@ impl Shell {
                     .justify_between()
                     .text_size(gpui::px(11.0))
                     .font_semibold()
-                    .text_color(rgb(TEXT_MUTED))
+                    .text_color(theme_rgb(TEXT_MUTED))
                     .child(self.strings.native.thinking)
                     .child(self.strings.native.preview_thinking),
             )
@@ -162,8 +164,8 @@ impl Shell {
                 div().max_h(gpui::px(64.0)).overflow_hidden().child(
                     TextView::markdown(("thinking-markdown", key), body.to_owned())
                         .selectable(true)
-                        .text_sm()
-                        .text_color(rgb(TEXT_SECONDARY)),
+                        .text_size(font_px(13.0))
+                        .text_color(theme_rgb(TEXT_SECONDARY)),
                 ),
             )
             .into_any_element()
@@ -175,19 +177,29 @@ fn attachment_block(label: &str, name: &str, detail: &str) -> AnyElement {
         .mt_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
+        .border_color(theme_rgb(BORDER))
+        .bg(theme_rgb(SURFACE))
         .px_3()
         .py_2()
         .flex()
         .items_center()
         .gap_2()
-        .child(div().text_xs().font_semibold().child(label.to_owned()))
-        .child(div().text_sm().line_clamp(1).child(name.to_owned()))
         .child(
             div()
-                .text_xs()
-                .text_color(rgb(TEXT_MUTED))
+                .text_size(font_px(12.0))
+                .font_semibold()
+                .child(label.to_owned()),
+        )
+        .child(
+            div()
+                .text_size(font_px(13.0))
+                .line_clamp(1)
+                .child(name.to_owned()),
+        )
+        .child(
+            div()
+                .text_size(font_px(12.0))
+                .text_color(theme_rgb(TEXT_MUTED))
                 .line_clamp(1)
                 .child(detail.to_owned()),
         )
@@ -199,21 +211,21 @@ fn semantic_block(label: &str, error: bool, key: usize, body: &str) -> AnyElemen
         .mt_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(if error { ERROR } else { BORDER }))
-        .bg(rgb(SURFACE))
+        .border_color(theme_rgb(if error { ERROR } else { BORDER }))
+        .bg(theme_rgb(SURFACE))
         .p_3()
         .child(
             div()
                 .mb_2()
-                .text_xs()
+                .text_size(font_px(12.0))
                 .font_semibold()
-                .text_color(rgb(if error { ERROR } else { TEXT_MUTED }))
+                .text_color(theme_rgb(if error { ERROR } else { TEXT_MUTED }))
                 .child(label.to_owned()),
         )
         .child(
             TextView::markdown(("semantic-markdown", key), body.to_owned())
                 .selectable(true)
-                .text_sm(),
+                .text_size(font_px(13.0)),
         )
         .into_any_element()
 }

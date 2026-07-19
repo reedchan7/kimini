@@ -1,6 +1,6 @@
 [package]
 name = "kimini"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Native Kimi Code GUI with a separate Web compatibility app."
 license = "MIT"
@@ -9,11 +9,12 @@ default-run = "kimini"
 
 [features]
 default = ["native"]
-native = ["dep:async-channel", "dep:gpui", "dep:gpui-component", "dep:gpui-component-assets", "dep:gpui-platform", "dep:mime_guess", "dep:portable-pty", "dep:tungstenite", "dep:ureq", "dep:vte", "dep:wry"]
+native = ["dep:async-channel", "dep:chrono", "dep:gpui", "dep:gpui-component", "dep:gpui-component-assets", "dep:gpui-platform", "dep:mime_guess", "dep:portable-pty", "dep:tungstenite", "dep:ureq", "dep:vte", "dep:wry"]
 legacy-web = ["dep:tao", "dep:wry", "dep:muda"]
 
 [dependencies]
 async-channel = { version = "2", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", optional = true }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", optional = true }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", optional = true }

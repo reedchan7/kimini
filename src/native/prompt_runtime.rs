@@ -36,6 +36,15 @@ impl PromptRuntime {
 
 impl Shell {
     pub(in crate::native) fn active_prompt_runtime(&self) -> Option<PromptRuntime> {
+        if let Some(draft) = self.new_session_draft.as_ref() {
+            return Some(PromptRuntime {
+                model: draft.model.clone(),
+                thinking: draft.thinking.clone(),
+                permission: draft.permission.clone(),
+                plan_mode: draft.plan_mode,
+                swarm_mode: draft.swarm_mode,
+            });
+        }
         resolve_prompt_runtime(
             self.model.active_runtime(),
             self.auth.summary.as_ref(),
@@ -45,6 +54,36 @@ impl Shell {
 
     pub(in crate::native) fn preferred_model(&self) -> Option<String> {
         configured_model(self.auth.summary.as_ref(), &self.models)
+    }
+}
+
+pub(in crate::native) fn thinking_segments(model: Option<&ModelCatalogItem>) -> Vec<String> {
+    let Some(model) = model else {
+        return vec!["on".into(), "off".into()];
+    };
+    let always_on = model
+        .capabilities
+        .iter()
+        .any(|capability| capability == "always_thinking");
+    let supported = always_on
+        || model
+            .capabilities
+            .iter()
+            .any(|capability| capability == "thinking");
+
+    if !model.support_efforts.is_empty() {
+        let mut segments = model.support_efforts.clone();
+        if !always_on && !segments.iter().any(|effort| effort == "off") {
+            segments.insert(0, "off".into());
+        }
+        return segments;
+    }
+    if always_on {
+        vec!["on".into()]
+    } else if supported {
+        vec!["on".into(), "off".into()]
+    } else {
+        vec!["off".into()]
     }
 }
 
@@ -196,5 +235,28 @@ mod tests {
     #[test]
     fn no_configured_model_blocks_prompt_construction() {
         assert!(resolve_prompt_runtime(None, Some(&auth(Some("  "))), &[]).is_none());
+    }
+
+    #[test]
+    fn always_thinking_effort_models_do_not_offer_off() {
+        let mut catalog = model("kimi-code/k3", Some("max"));
+        catalog.capabilities = vec!["always_thinking".into()];
+        catalog.support_efforts = vec!["low".into(), "high".into(), "max".into()];
+
+        assert_eq!(
+            thinking_segments(Some(&catalog)),
+            vec!["low", "high", "max"]
+        );
+    }
+
+    #[test]
+    fn toggle_effort_models_offer_off_first() {
+        let mut catalog = model("kimi-code/k2", Some("high"));
+        catalog.support_efforts = vec!["low".into(), "high".into()];
+
+        assert_eq!(
+            thinking_segments(Some(&catalog)),
+            vec!["off", "low", "high"]
+        );
     }
 }

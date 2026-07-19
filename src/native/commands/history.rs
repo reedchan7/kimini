@@ -31,6 +31,46 @@ impl Shell {
                     }
                     Err(error) => this.state = LoadState::Failed(error),
                 }
+                if this.session_search_open && this.model.has_more_sessions() {
+                    this.load_remaining_sessions_for_search(cx);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub(in crate::native) fn load_remaining_sessions_for_search(&mut self, cx: &mut Context<Self>) {
+        if self.sessions_loading || !self.model.has_more_sessions() {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let Some(session_id) = self
+            .model
+            .sessions()
+            .last()
+            .map(|session| session.id.clone())
+        else {
+            return;
+        };
+        self.sessions_loading = true;
+        cx.notify();
+        let task =
+            cx.background_spawn(async move { client.list_session_pages_before(&session_id) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await.map_err(|error| error.to_string());
+            let _ = this.update(cx, |this, cx| {
+                this.sessions_loading = false;
+                match result {
+                    Ok(pages) => {
+                        for page in pages {
+                            this.model.append_session_page(page);
+                        }
+                    }
+                    Err(error) => this.state = LoadState::Failed(error),
+                }
                 cx.notify();
             });
         })

@@ -1,9 +1,11 @@
 mod auth;
 mod catalog;
+mod config;
 mod file;
 mod fs;
 mod goals;
 mod interaction;
+mod meta;
 mod prompt;
 mod session;
 mod side_chat;
@@ -20,6 +22,8 @@ use crate::daemon::Connection;
 
 use super::ApiError;
 
+pub use config::{KimiConfig, ThinkingConfig};
+pub use meta::ServerMeta;
 pub use prompt::PromptResult;
 
 const API_PREFIX: &str = "/api/v1";

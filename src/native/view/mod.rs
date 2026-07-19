@@ -10,9 +10,13 @@ mod files;
 mod goal;
 mod interaction;
 mod message;
+mod new_session;
 mod panel;
 mod prompt_queue;
 mod recovery;
+mod session_search;
+mod settings;
+mod settings_components;
 mod side_chat;
 mod sidebar;
 mod sidebar_row;
@@ -23,14 +27,16 @@ mod thinking;
 mod tool_card;
 mod toolbar;
 
-use gpui::{Context, IntoElement, Render, Role, Window, div, prelude::*, rgb};
+use gpui::{Context, IntoElement, Render, Role, Window, div, prelude::*};
 
 use super::app::{Shell, UtilityPanel};
 use super::theme::*;
 use super::{
-    ArchiveSession, CompactSession, ExportSession, FocusNext, FocusPrevious, ForkSession,
-    RenameSession, SetModel, SetPermission, SetThinking, SteerPrompt, ToggleFiles, ToggleSkills,
-    ToggleTasks, ToggleTerminal, UndoSession,
+    ArchiveSession, CloseSessionSearch, CompactSession, ExportSession, FocusNext, FocusPrevious,
+    FocusSessionSearch, ForkSession, NewSession, RenameSession, SessionSearchNext,
+    SessionSearchPrevious, SetModel, SetPermission, SetThinking, SteerPrompt, ToggleBrowser,
+    ToggleFiles, ToggleGoalMode, TogglePlanMode, ToggleSideChat, ToggleSidebar, ToggleSkills,
+    ToggleSwarmMode, ToggleTasks, ToggleTerminal, UndoSession,
 };
 
 impl Render for Shell {
@@ -43,6 +49,21 @@ impl Render for Shell {
             .aria_label("Kimini")
             .on_action(cx.listener(|_, _: &FocusNext, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &FocusPrevious, window, cx| window.focus_prev(cx)))
+            .on_action(cx.listener(|this, _: &FocusSessionSearch, window, cx| {
+                this.open_session_search(window, cx);
+            }))
+            .on_action(
+                cx.listener(|this, _: &SessionSearchNext, _, cx| this.move_session_search(1, cx)),
+            )
+            .on_action(cx.listener(|this, _: &SessionSearchPrevious, _, cx| {
+                this.move_session_search(-1, cx)
+            }))
+            .on_action(cx.listener(|this, _: &CloseSessionSearch, window, cx| {
+                this.close_session_search(window, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &NewSession, window, cx| this.begin_new_session(window, cx)),
+            )
             .on_action(
                 cx.listener(|this, _: &SteerPrompt, window, cx| this.steer_prompt(window, cx)),
             )
@@ -54,6 +75,21 @@ impl Render for Shell {
                     this.toggle_terminal(window, cx)
                 }),
             )
+            .on_action(cx.listener(|this, _: &TogglePlanMode, _, cx| this.toggle_plan_mode(cx)))
+            .on_action(cx.listener(|this, _: &ToggleSwarmMode, _, cx| this.toggle_swarm_mode(cx)))
+            .on_action(cx.listener(|this, _: &ToggleGoalMode, _, cx| this.toggle_goal_mode(cx)))
+            .on_action(
+                cx.listener(|this, _: &ToggleSideChat, window, cx| {
+                    this.toggle_side_chat(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &ToggleBrowser, window, cx| this.toggle_browser(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
+                this.sidebar_collapsed = !this.sidebar_collapsed;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, action: &SetModel, _, cx| {
                 this.set_model(action.model.clone(), cx)
             }))
@@ -82,15 +118,17 @@ impl Render for Shell {
             )
             .on_action(cx.listener(|this, _: &ExportSession, _, cx| this.export_active_session(cx)))
             .size_full()
+            .relative()
             .flex()
-            .bg(rgb(CANVAS))
-            .text_color(rgb(TEXT))
-            .child(self.sidebar(cx))
+            .bg(theme_rgb(CANVAS))
+            .text_color(theme_rgb(TEXT))
+            .when(!self.sidebar_collapsed, |root| root.child(self.sidebar(cx)))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .min_h_0()
+                    .relative()
                     .flex()
                     .flex_col()
                     .child(self.toolbar(cx))
@@ -99,9 +137,12 @@ impl Render for Shell {
                         div()
                             .flex_1()
                             .min_h_0()
+                            .relative()
                             .flex()
                             .child(if self.browser.is_some() {
                                 self.browser_surface(cx).into_any_element()
+                            } else if self.new_session_draft.is_some() {
+                                self.new_session_landing(window, cx).into_any_element()
                             } else {
                                 div()
                                     .flex_1()
@@ -126,11 +167,6 @@ impl Render for Shell {
                                 |layout| layout.child(self.task_panel(cx)),
                             )
                             .when(
-                                self.utility_panel == Some(UtilityPanel::Auth)
-                                    && self.browser.is_none(),
-                                |layout| layout.child(self.auth_panel(cx)),
-                            )
-                            .when(
                                 self.utility_panel == Some(UtilityPanel::Files)
                                     && self.browser.is_none(),
                                 |layout| layout.child(self.file_panel(cx)),
@@ -152,5 +188,12 @@ impl Render for Shell {
                             ),
                     ),
             )
+            .when(
+                self.utility_panel == Some(UtilityPanel::Auth) && self.browser.is_none(),
+                |root| root.child(self.auth_panel(cx)),
+            )
+            .when(self.session_search_open, |root| {
+                root.child(self.session_search_overlay(cx))
+            })
     }
 }

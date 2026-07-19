@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, Role, div, prelude::*, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*};
 
 use super::super::app::{LoadState, Shell};
 use super::super::theme::*;
@@ -19,15 +19,15 @@ impl Shell {
                 .justify_between()
                 .gap_3()
                 .border_b_1()
-                .border_color(rgb(ERROR))
-                .bg(rgb(0xffeeea))
+                .border_color(theme_rgb(ERROR))
+                .bg(theme_rgb(0xffeeea))
                 .px_4()
                 .py_2()
                 .child(
                     div()
                         .min_w_0()
-                        .text_sm()
-                        .text_color(rgb(ERROR))
+                        .text_size(font_px(13.0))
+                        .text_color(theme_rgb(ERROR))
                         .line_clamp(2)
                         .child(error.clone()),
                 )

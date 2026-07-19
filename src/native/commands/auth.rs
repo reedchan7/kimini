@@ -4,7 +4,7 @@ use gpui::{AppContext, Context, Window};
 
 use crate::protocol::{OAuthFlowStart, OAuthFlowStatus};
 
-use super::super::app::{Shell, UtilityPanel};
+use super::super::app::{SettingsTab, Shell, UtilityPanel};
 
 impl Shell {
     pub(in crate::native) fn toggle_auth_panel(&mut self, cx: &mut Context<Self>) {
@@ -14,6 +14,17 @@ impl Shell {
             Some(UtilityPanel::Auth)
         };
         if self.utility_panel == Some(UtilityPanel::Auth) {
+            self.settings_tab = SettingsTab::General;
+            self.refresh_auth(cx);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::native) fn open_auth_panel(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+        let opened = self.utility_panel != Some(UtilityPanel::Auth);
+        self.utility_panel = Some(UtilityPanel::Auth);
+        self.settings_tab = tab;
+        if opened {
             self.refresh_auth(cx);
         }
         cx.notify();

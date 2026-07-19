@@ -1,6 +1,6 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{
-    IconName, Selectable, Sizable as _, StyledExt,
+    IconName, Sizable as _, StyledExt,
     button::{Button, ButtonVariants},
     scroll::ScrollableElement,
     text::TextView,
@@ -10,28 +10,6 @@ use super::super::app::{Shell, UtilityPanel};
 use super::super::theme::*;
 
 impl Shell {
-    pub(super) fn thinking_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        self.transcript.latest_thinking()?;
-        Some(
-            Button::new("thinking-preview-toggle")
-                .xsmall()
-                .ghost()
-                .selected(self.utility_panel == Some(UtilityPanel::Thinking))
-                .icon(IconName::PanelRight)
-                .tooltip(self.strings.native.preview_thinking)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if this.utility_panel == Some(UtilityPanel::Thinking) {
-                        this.utility_panel = None;
-                    } else {
-                        this.preview_thinking = None;
-                        this.utility_panel = Some(UtilityPanel::Thinking);
-                    }
-                    cx.notify();
-                }))
-                .into_any_element(),
-        )
-    }
-
     pub(super) fn thinking_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let thinking = self
             .preview_thinking
@@ -49,8 +27,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(
                 div()
                     .h(px(40.0))
@@ -60,12 +38,12 @@ impl Shell {
                     .justify_between()
                     .px_3()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(theme_rgb(BORDER))
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(font_px(11.0))
                             .font_semibold()
-                            .text_color(rgb(TEXT_SECONDARY))
+                            .text_color(theme_rgb(TEXT_SECONDARY))
                             .child(self.strings.native.preview_thinking),
                     )
                     .child(
@@ -94,14 +72,14 @@ impl Shell {
                                 TextView::markdown("thinking-preview-content", text.to_owned())
                                     .selectable(true)
                                     .w_full()
-                                    .text_sm()
-                                    .text_color(rgb(TEXT_SECONDARY)),
+                                    .text_size(font_px(13.0))
+                                    .text_color(theme_rgb(TEXT_SECONDARY)),
                             )
                             .into_any_element()
                     } else {
                         div()
-                            .text_sm()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(13.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(self.strings.native.thinking_preview_hint)
                             .into_any_element()
                     }),

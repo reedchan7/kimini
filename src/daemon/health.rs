@@ -24,10 +24,23 @@ pub(super) fn is_healthy(origin: &str) -> bool {
     let request = format!(
         "GET /api/v1/healthz HTTP/1.0\r\nHost: {host}:{port}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
     );
-    let mut response = String::new();
-    stream.write_all(request.as_bytes()).is_ok()
-        && stream.read_to_string(&mut response).is_ok()
-        && healthz_ok(&response)
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = Vec::new();
+    let mut chunk = [0; 1024];
+    loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => return healthz_ok(&String::from_utf8_lossy(&response)),
+            Ok(read) => {
+                response.extend_from_slice(&chunk[..read]);
+                if healthz_ok(&String::from_utf8_lossy(&response)) {
+                    return true;
+                }
+            }
+            Err(_) => return false,
+        }
+    }
 }
 
 fn endpoint(origin: &str) -> Option<(String, u16)> {
@@ -70,5 +83,30 @@ mod tests {
         assert!(!healthz_ok(bad_status));
         assert!(!healthz_ok(bad_body));
         assert!(!healthz_ok(""));
+    }
+
+    #[test]
+    fn complete_health_response_does_not_require_socket_eof() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 512];
+            let request_size = stream.read(&mut request).unwrap();
+            assert!(request_size > 0);
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: keep-alive\r\n\r\n{\"code\":0}",
+                )
+                .unwrap();
+            release_rx.recv().unwrap();
+        });
+
+        let healthy = is_healthy(&format!("http://{address}"));
+        release_tx.send(()).unwrap();
+        server.join().unwrap();
+
+        assert!(healthy);
     }
 }

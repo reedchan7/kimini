@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{
     Icon, IconName, Sizable as _, StyledExt, scroll::ScrollableElement, text::TextView,
 };
@@ -43,8 +43,8 @@ impl Shell {
             .mt_2()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(if failed { ERROR } else { BORDER }))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(if failed { ERROR } else { BORDER }))
+            .bg(theme_rgb(SURFACE))
             .overflow_hidden()
             .child(
                 div()
@@ -53,17 +53,18 @@ impl Shell {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .bg(rgb(SURFACE_SUBTLE))
+                    .bg(theme_rgb(SURFACE_SUBTLE))
                     .child(status_mark(running, failed))
-                    .child(div().text_size(px(11.0)).font_semibold().child(format!(
-                        "{} {}",
-                        tools.len(),
-                        self.strings.native.tool
-                    )))
                     .child(
                         div()
-                            .text_size(px(11.0))
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(11.0))
+                            .font_semibold()
+                            .child(format!("{} {}", tools.len(), self.strings.native.tool)),
+                    )
+                    .child(
+                        div()
+                            .text_size(font_px(11.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(format!("· {status}")),
                     ),
             )
@@ -105,7 +106,9 @@ impl Shell {
         };
 
         div()
-            .when(separated, |row| row.border_t_1().border_color(rgb(BORDER)))
+            .when(separated, |row| {
+                row.border_t_1().border_color(theme_rgb(BORDER))
+            })
             .child(
                 div()
                     .id(("tool-card-header", key))
@@ -127,7 +130,7 @@ impl Shell {
                                 }
                                 cx.notify();
                             }))
-                            .hover(|item| item.bg(rgb(SURFACE_SUBTLE)))
+                            .hover(|item| item.bg(theme_rgb(SURFACE_SUBTLE)))
                     })
                     .min_h(px(34.0))
                     .flex()
@@ -138,29 +141,29 @@ impl Shell {
                     .child(
                         Icon::new(tool_icon(tool.name.as_deref()))
                             .xsmall()
-                            .text_color(rgb(TEXT_MUTED)),
+                            .text_color(theme_rgb(TEXT_MUTED)),
                     )
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(font_px(11.0))
                             .font_semibold()
-                            .text_color(rgb(TEXT_SECONDARY))
+                            .text_color(theme_rgb(TEXT_SECONDARY))
                             .child(label),
                     )
                     .child(
                         div()
                             .min_w_0()
                             .flex_1()
-                            .text_size(px(11.0))
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(11.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .line_clamp(1)
                             .child(tool.summary.clone()),
                     )
                     .when_some(tool.diff.as_ref(), |header, diff| {
                         header.child(
                             div()
-                                .text_size(px(10.0))
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(10.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(format!("+{} −{}", diff.added, diff.removed)),
                         )
                     })
@@ -173,7 +176,7 @@ impl Shell {
                                 IconName::ChevronRight
                             })
                             .xsmall()
-                            .text_color(rgb(TEXT_MUTED)),
+                            .text_color(theme_rgb(TEXT_MUTED)),
                         )
                     }),
             )
@@ -184,23 +187,23 @@ impl Shell {
     fn tool_details(&self, key: usize, tool: &ToolCard) -> impl IntoElement {
         div()
             .border_t_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .max_h(px(420.0))
             .overflow_y_scrollbar()
-            .bg(rgb(SURFACE_SUBTLE))
+            .bg(theme_rgb(SURFACE_SUBTLE))
             .p_3()
             .when_some(tool.diff.as_ref(), |details, diff| {
                 details.child(
                     TextView::markdown(("tool-diff", key), diff.markdown())
                         .selectable(true)
-                        .text_xs(),
+                        .text_size(font_px(12.0)),
                 )
             })
             .when_some(tool.detail.clone(), |details, detail| {
                 details.child(
                     TextView::markdown(("tool-input", key), detail)
                         .selectable(true)
-                        .text_xs(),
+                        .text_size(font_px(12.0)),
                 )
             })
             .when_some(tool.output.clone(), |details, output| {
@@ -213,13 +216,13 @@ impl Shell {
                                     .mt_3()
                                     .pt_3()
                                     .border_t_1()
-                                    .border_color(rgb(BORDER))
+                                    .border_color(theme_rgb(BORDER))
                             },
                         )
                         .child(
                             TextView::markdown(("tool-output", key), output)
                                 .selectable(true)
-                                .text_xs(),
+                                .text_size(font_px(12.0)),
                         ),
                 )
             })
@@ -257,7 +260,7 @@ fn status_mark(running: bool, error: bool) -> AnyElement {
         div()
             .size(px(7.0))
             .rounded_full()
-            .bg(rgb(ACCENT))
+            .bg(theme_rgb(ACCENT))
             .into_any_element()
     } else {
         Icon::new(if error {
@@ -266,7 +269,7 @@ fn status_mark(running: bool, error: bool) -> AnyElement {
             IconName::CircleCheck
         })
         .xsmall()
-        .text_color(rgb(if error { ERROR } else { SUCCESS }))
+        .text_color(theme_rgb(if error { ERROR } else { SUCCESS }))
         .into_any_element()
     }
 }
@@ -276,7 +279,7 @@ fn tool_result_mark(running: bool, error: bool) -> AnyElement {
         div()
             .size(px(6.0))
             .rounded_full()
-            .bg(rgb(ACCENT))
+            .bg(theme_rgb(ACCENT))
             .into_any_element()
     } else {
         Icon::new(if error {
@@ -285,7 +288,7 @@ fn tool_result_mark(running: bool, error: bool) -> AnyElement {
             IconName::Check
         })
         .xsmall()
-        .text_color(rgb(if error { ERROR } else { SUCCESS }))
+        .text_color(theme_rgb(if error { ERROR } else { SUCCESS }))
         .into_any_element()
     }
 }

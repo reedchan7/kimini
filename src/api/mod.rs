@@ -9,6 +9,6 @@ mod socket;
 pub use error::ApiError;
 #[cfg(feature = "native")]
 pub use export::SessionExport;
-pub use rest::{KimiClient, PromptResult};
+pub use rest::{KimiClient, KimiConfig, PromptResult, ServerMeta, ThinkingConfig};
 #[cfg(feature = "native")]
 pub use socket::{EventSocket, SocketEvent};

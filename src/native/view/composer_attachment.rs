@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*, px};
 
 use super::super::app::Shell;
 use super::super::attachment::AttachmentState;
@@ -6,10 +6,10 @@ use super::super::theme::*;
 
 impl Shell {
     pub(super) fn attachment_strip(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(session) = self.model.active_session() else {
+        let Some(composer_key) = self.active_composer_key() else {
             return div().into_any_element();
         };
-        let drafts = self.attachments.for_session(&session.id).to_vec();
+        let drafts = self.attachments.for_session(&composer_key).to_vec();
         div()
             .when(!drafts.is_empty(), |strip| {
                 strip
@@ -39,12 +39,12 @@ impl Shell {
                             .gap_2()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(if failed { ERROR } else { BORDER }))
+                            .border_color(theme_rgb(if failed { ERROR } else { BORDER }))
                             .px_2()
                             .py_1()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .child(div().line_clamp(1).child(draft.name))
-                            .child(div().text_color(rgb(TEXT_MUTED)).child(status))
+                            .child(div().text_color(theme_rgb(TEXT_MUTED)).child(status))
                             .child(
                                 div()
                                     .id(("remove-attachment", id))
@@ -55,7 +55,7 @@ impl Shell {
                                     .cursor_pointer()
                                     .rounded_sm()
                                     .px_1()
-                                    .hover(|item| item.bg(rgb(SURFACE_ACTIVE)))
+                                    .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.remove_attachment(id, cx)
                                     }))

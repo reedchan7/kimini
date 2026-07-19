@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, scroll::ScrollableElement};
 
 use crate::native::{app::Shell, theme::*};
@@ -17,8 +17,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(self.skill_panel_header(cx))
             .child(
                 div()
@@ -32,10 +32,10 @@ impl Shell {
                                 .mb_3()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(ERROR))
+                                .border_color(theme_rgb(ERROR))
                                 .p_2()
-                                .text_xs()
-                                .text_color(rgb(ERROR))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(ERROR))
                                 .child(error),
                         )
                     })
@@ -44,9 +44,9 @@ impl Shell {
                             div()
                                 .mb_3()
                                 .rounded_md()
-                                .bg(rgb(SURFACE_ACTIVE))
+                                .bg(theme_rgb(SURFACE_ACTIVE))
                                 .p_2()
-                                .text_xs()
+                                .text_size(font_px(12.0))
                                 .child(format!("{}: {name}", self.strings.native.skill_activated)),
                         )
                     })
@@ -55,8 +55,8 @@ impl Shell {
                             div()
                                 .py_8()
                                 .text_center()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(if self.skills.loading {
                                     self.strings.native.skills_loading
                                 } else {
@@ -74,8 +74,8 @@ impl Shell {
                             .mb_2()
                             .rounded_lg()
                             .border_1()
-                            .border_color(rgb(BORDER))
-                            .bg(rgb(CANVAS))
+                            .border_color(theme_rgb(BORDER))
+                            .bg(theme_rgb(CANVAS))
                             .p_3()
                             .child(
                                 div()
@@ -87,7 +87,7 @@ impl Shell {
                                         div()
                                             .min_w_0()
                                             .flex_1()
-                                            .text_sm()
+                                            .text_size(font_px(13.0))
                                             .font_semibold()
                                             .line_clamp(1)
                                             .child(skill.name.clone()),
@@ -117,8 +117,8 @@ impl Shell {
                                 card.child(
                                     div()
                                         .mt_2()
-                                        .text_xs()
-                                        .text_color(rgb(TEXT_MUTED))
+                                        .text_size(font_px(12.0))
+                                        .text_color(theme_rgb(TEXT_MUTED))
                                         .child(skill.description.clone()),
                                 )
                             })
@@ -128,8 +128,8 @@ impl Shell {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .text_xs()
-                                    .text_color(rgb(TEXT_MUTED))
+                                    .text_size(font_px(12.0))
+                                    .text_color(theme_rgb(TEXT_MUTED))
                                     .child(if skill.source.is_empty() {
                                         "—".to_owned()
                                     } else {
@@ -152,20 +152,20 @@ impl Shell {
             .justify_between()
             .px_3()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .font_semibold()
                     .child(self.strings.native.skills)
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .font_normal()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(self.skills.items.len().to_string()),
                     ),
             )

@@ -110,6 +110,11 @@ impl WorkspaceFiles {
         self.rebuild();
     }
 
+    pub fn replace_git_status(&mut self, git: Option<FsGitStatusSummary>) {
+        self.git = git;
+        self.rebuild();
+    }
+
     pub fn toggle_directory(&mut self, path: &str) -> bool {
         if !self.expanded.insert(path.to_owned()) {
             self.expanded.remove(path);

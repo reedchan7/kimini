@@ -31,30 +31,34 @@ impl ComposerDrafts {
 }
 
 impl Shell {
+    pub(super) fn active_composer_key(&self) -> Option<String> {
+        self.new_session_draft
+            .as_ref()
+            .map(super::app::NewSessionDraft::key)
+            .or_else(|| {
+                self.model
+                    .active_session()
+                    .map(|session| session.id.clone())
+            })
+    }
+
     pub(super) fn store_active_composer_draft(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self
-            .model
-            .active_session()
-            .map(|session| session.id.clone())
-        else {
+        let Some(key) = self.active_composer_key() else {
             return;
         };
         self.drafts
-            .set(&session_id, self.composer.read(cx).value().to_string());
+            .set(&key, self.composer.read(cx).value().to_string());
     }
 
     pub(super) fn sync_composer_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let active_session_id = self
-            .model
-            .active_session()
-            .map(|session| session.id.clone());
-        if self.composer_session_id == active_session_id {
+        let active_key = self.active_composer_key();
+        if self.composer_session_id == active_key {
             return;
         }
-        self.composer_session_id = active_session_id.clone();
-        let value = active_session_id
+        self.composer_session_id = active_key.clone();
+        let value = active_key
             .as_deref()
-            .map(|session_id| self.drafts.get(session_id))
+            .map(|key| self.drafts.get(key))
             .unwrap_or_default()
             .to_owned();
         self.composer
@@ -71,11 +75,41 @@ impl Shell {
             self.composer_session_id = None;
         }
     }
+
+    pub(super) fn restore_new_session_draft(&mut self, key: &str, text: String) {
+        self.drafts.set(key, text);
+        if self.active_composer_key().as_deref() == Some(key) {
+            self.composer_session_id = None;
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn new_session_draft(id: u64, cwd: &str) -> super::super::app::NewSessionDraft {
+        super::super::app::NewSessionDraft {
+            id,
+            cwd: cwd.into(),
+            model: "kimi-code/k3".into(),
+            thinking: "high".into(),
+            permission: "manual".into(),
+            plan_mode: false,
+            swarm_mode: false,
+            submitting: false,
+        }
+    }
+
+    #[test]
+    fn changing_workspace_does_not_change_a_draft_key() {
+        let mut draft = new_session_draft(7, "/workspace/one");
+        let key = draft.key();
+
+        draft.cwd = "/workspace/two".into();
+
+        assert_eq!(draft.key(), key);
+    }
 
     #[test]
     fn drafts_are_isolated_and_empty_text_clears_storage() {

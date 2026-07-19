@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::api::KimiClient;
+use crate::api::{KimiClient, KimiConfig, ServerMeta};
 use crate::daemon::{Connection, discover_connection};
 use crate::protocol::{
     AuthSummary, GoalSnapshot, ModelCatalogItem, Page, PromptQueue, Session, SessionSnapshot,
@@ -13,6 +13,8 @@ pub(super) struct Bootstrap {
     pub active: Option<LoadedSession>,
     pub models: Vec<ModelCatalogItem>,
     pub auth: Option<AuthSummary>,
+    pub meta: Option<ServerMeta>,
+    pub config: Result<KimiConfig, String>,
 }
 
 pub(super) struct LoadedSession {
@@ -35,6 +37,8 @@ pub(super) fn load() -> Result<Bootstrap, String> {
         .map(|catalog| catalog.items)
         .unwrap_or_default();
     let auth = client.auth_summary().ok();
+    let meta = client.server_meta().ok();
+    let config = client.get_config().map_err(|error| error.to_string());
     let active = sessions
         .items
         .iter()
@@ -48,6 +52,8 @@ pub(super) fn load() -> Result<Bootstrap, String> {
         active,
         models,
         auth,
+        meta,
+        config,
     })
 }
 

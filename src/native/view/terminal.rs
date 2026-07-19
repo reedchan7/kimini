@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, input::Input, scroll::ScrollableElement};
 
 use crate::protocol::TerminalStatus;
@@ -51,8 +51,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(self.terminal_header(cx))
             .child(self.terminal_tabs(&tabs, active_id, cx))
             .child(
@@ -65,21 +65,21 @@ impl Shell {
                     .min_h_0()
                     .track_scroll(&self.terminal_scroll)
                     .overflow_y_scrollbar()
-                    .bg(rgb(0x171716))
+                    .bg(theme_rgb(0x171716))
                     .p_3()
                     .when(loading && active.is_none(), |surface| {
                         surface.child(
                             div()
-                                .text_sm()
-                                .text_color(rgb(0xa7a7a2))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(0xa7a7a2))
                                 .child(self.strings.native.terminal_loading),
                         )
                     })
                     .when(!loading && active.is_none(), |surface| {
                         surface.child(
                             div()
-                                .text_sm()
-                                .text_color(rgb(0xa7a7a2))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(0xa7a7a2))
                                 .child(self.strings.native.terminal_empty),
                         )
                     })
@@ -89,8 +89,8 @@ impl Shell {
                                 .id("terminal-output-text")
                                 .w_full()
                                 .font_family("SF Mono")
-                                .text_xs()
-                                .text_color(rgb(0xe8e8e3))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(0xe8e8e3))
                                 .child(output.clone()),
                         )
                     })
@@ -100,12 +100,12 @@ impl Shell {
                                 .mt_3()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x4a4431))
-                                .bg(rgb(0x242116))
+                                .border_color(theme_rgb(0x4a4431))
+                                .bg(theme_rgb(0x242116))
                                 .px_2()
                                 .py_1()
-                                .text_xs()
-                                .text_color(rgb(0xd8c98e))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(0xd8c98e))
                                 .child(notice),
                         )
                     })
@@ -113,20 +113,24 @@ impl Shell {
                         surface.child(
                             div()
                                 .mt_3()
-                                .text_xs()
-                                .text_color(rgb(0xff8a80))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(0xff8a80))
                                 .child(error),
                         )
                     })
                     .when(status == Some(TerminalStatus::Exited), |surface| {
-                        surface.child(div().mt_3().text_xs().text_color(rgb(0xa7a7a2)).child(
-                            match exit_code {
-                                Some(code) => {
-                                    format!("{} · {code}", self.strings.native.terminal_exited)
-                                }
-                                None => self.strings.native.terminal_exited.into(),
-                            },
-                        ))
+                        surface.child(
+                            div()
+                                .mt_3()
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(0xa7a7a2))
+                                .child(match exit_code {
+                                    Some(code) => {
+                                        format!("{} · {code}", self.strings.native.terminal_exited)
+                                    }
+                                    None => self.strings.native.terminal_exited.into(),
+                                }),
+                        )
                     }),
             )
             .child(self.terminal_composer(status, cx))
@@ -142,10 +146,10 @@ impl Shell {
             .justify_between()
             .px_3()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .child(
                 div()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .font_semibold()
                     .child(self.strings.native.terminal),
             )
@@ -182,7 +186,7 @@ impl Shell {
             .gap_1()
             .overflow_x_scrollbar()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .px_2()
             .py_1()
             .children(
@@ -202,8 +206,10 @@ impl Shell {
                             .rounded_md()
                             .px_2()
                             .py_1()
-                            .text_xs()
-                            .when(selected, |tab| tab.bg(rgb(SURFACE_ACTIVE)).font_semibold())
+                            .text_size(font_px(12.0))
+                            .when(selected, |tab| {
+                                tab.bg(theme_rgb(SURFACE_ACTIVE)).font_semibold()
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.select_terminal(terminal_id.clone(), cx)
                             }))
@@ -238,7 +244,7 @@ impl Shell {
             .items_center()
             .gap_2()
             .border_t_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .p_3()
             .when(running, |composer| {
                 composer

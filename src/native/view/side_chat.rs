@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, input::Input, scroll::ScrollableElement, text::TextView};
 
 use super::super::app::Shell;
@@ -33,8 +33,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(self.side_chat_header(cx))
             .child(
                 div()
@@ -50,8 +50,8 @@ impl Shell {
                             div()
                                 .py_8()
                                 .text_center()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(self.strings.native.side_chat_opening),
                         )
                     })
@@ -60,8 +60,8 @@ impl Shell {
                             div()
                                 .py_8()
                                 .text_center()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(self.strings.native.side_chat_empty),
                         )
                     })
@@ -74,8 +74,8 @@ impl Shell {
                     .when(sending, |panel| {
                         panel.child(
                             div()
-                                .text_xs()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(self.strings.native.side_chat_thinking),
                         )
                     })
@@ -85,10 +85,10 @@ impl Shell {
                                 .mt_3()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(ERROR))
+                                .border_color(theme_rgb(ERROR))
                                 .p_2()
-                                .text_xs()
-                                .text_color(rgb(ERROR))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(ERROR))
                                 .child(error),
                         )
                     }),
@@ -106,7 +106,7 @@ impl Shell {
             .gap_2()
             .px_3()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .child(
                 div()
                     .min_w_0()
@@ -114,15 +114,15 @@ impl Shell {
                     .flex_col()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(font_px(13.0))
                             .font_semibold()
                             .child(self.strings.native.side_chat),
                     )
                     .child(
                         div()
                             .truncate()
-                            .text_xs()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(self.strings.native.side_chat_subtitle),
                     ),
             )
@@ -139,18 +139,23 @@ impl Shell {
             .aria_label(format!("{}: {}", self.strings.native.you, turn.user))
             .mb_4()
             .child(
-                div().ml_5().rounded_lg().bg(rgb(ASSISTANT)).p_3().child(
-                    TextView::markdown(("side-chat-user", index), turn.user.clone())
-                        .selectable(true)
-                        .text_sm(),
-                ),
+                div()
+                    .ml_5()
+                    .rounded_lg()
+                    .bg(theme_rgb(ASSISTANT))
+                    .p_3()
+                    .child(
+                        TextView::markdown(("side-chat-user", index), turn.user.clone())
+                            .selectable(true)
+                            .text_size(font_px(13.0)),
+                    ),
             )
             .when(!turn.thinking.is_empty(), |item| {
                 item.child(
                     div()
                         .mt_3()
-                        .text_xs()
-                        .text_color(rgb(TEXT_MUTED))
+                        .text_size(font_px(12.0))
+                        .text_color(theme_rgb(TEXT_MUTED))
                         .child(format!(
                             "{}\n{}",
                             self.strings.native.side_chat_thinking, turn.thinking
@@ -162,7 +167,7 @@ impl Shell {
                     div().mt_3().child(
                         TextView::markdown(("side-chat-assistant", index), turn.assistant.clone())
                             .selectable(true)
-                            .text_sm(),
+                            .text_size(font_px(13.0)),
                     ),
                 )
             })
@@ -179,13 +184,13 @@ impl Shell {
         div()
             .flex_none()
             .border_t_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .p_3()
             .child(
                 div()
                     .rounded_lg()
                     .border_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(theme_rgb(BORDER))
                     .p_2()
                     .child(
                         accessible_input(

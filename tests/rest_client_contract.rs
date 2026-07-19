@@ -39,6 +39,45 @@ fn pages_sessions_from_the_oldest_loaded_session() {
 }
 
 #[test]
+fn drains_every_remaining_session_page_for_global_search() {
+    let first = serde_json::json!({
+        "code": 0,
+        "msg": "",
+        "data": {
+            "items": [session_json("older 1")],
+            "has_more": true
+        },
+        "request_id": "req_01"
+    })
+    .to_string();
+    let second = serde_json::json!({
+        "code": 0,
+        "msg": "",
+        "data": {
+            "items": [session_json("older/2")],
+            "has_more": false
+        },
+        "request_id": "req_02"
+    })
+    .to_string();
+    let (origin, requests) = many_responses(vec![first, second]);
+    let client = KimiClient::new(Connection::new(origin, None));
+
+    let pages = client.list_session_pages_before("loaded oldest").unwrap();
+    let requests = requests.join().unwrap();
+
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].items[0].id, "older 1");
+    assert_eq!(pages[1].items[0].id, "older/2");
+    assert!(requests[0].starts_with(
+        "GET /api/v1/sessions?before_id=loaded%20oldest&page_size=100&include_archive=false"
+    ));
+    assert!(requests[1].starts_with(
+        "GET /api/v1/sessions?before_id=older%201&page_size=100&include_archive=false"
+    ));
+}
+
+#[test]
 fn lists_archived_sessions_with_an_independent_cursor() {
     let (origin, request) = one_response(
         r#"{"code":0,"msg":"","data":{"items":[],"has_more":false},"request_id":"req_01"}"#,
@@ -333,6 +372,34 @@ fn manages_oauth_readiness_and_device_flows() {
             .unwrap()
             .starts_with("POST /api/v1/oauth/logout")
     );
+}
+
+#[test]
+fn reads_and_patches_the_daemon_settings_contract() {
+    let config = r#"{"default_model":"kimi-code/k3","thinking":{"enabled":true,"effort":"max"},"default_permission_mode":"yolo","default_plan_mode":false,"merge_all_available_skills":true,"telemetry":false}"#;
+    let (origin, request) = one_response(format!(
+        r#"{{"code":0,"msg":"","data":{config},"request_id":"req_config_get"}}"#
+    ));
+    let loaded = KimiClient::new(Connection::new(origin, None))
+        .get_config()
+        .unwrap();
+    assert_eq!(loaded.default_model.as_deref(), Some("kimi-code/k3"));
+    assert_eq!(loaded.default_permission_mode.as_deref(), Some("yolo"));
+    assert!(request.join().unwrap().starts_with("GET /api/v1/config"));
+
+    let (origin, request) = one_response(format!(
+        r#"{{"code":0,"msg":"","data":{config},"request_id":"req_config_post"}}"#
+    ));
+    KimiClient::new(Connection::new(origin, None))
+        .patch_config(&serde_json::json!({
+            "default_permission_mode": "auto",
+            "thinking": { "enabled": false }
+        }))
+        .unwrap();
+    let request = request.join().unwrap();
+    assert!(request.starts_with("POST /api/v1/config"));
+    assert!(request.contains(r#""default_permission_mode":"auto""#));
+    assert!(request.contains(r#""thinking":{"enabled":false}"#));
 }
 
 #[test]
@@ -784,6 +851,66 @@ fn one_response(body: impl Into<String>) -> (String, thread::JoinHandle<String>)
         request
     });
     (format!("http://{address}"), handle)
+}
+
+fn many_responses(bodies: Vec<String>) -> (String, thread::JoinHandle<Vec<String>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let handle = thread::spawn(move || {
+        bodies
+            .into_iter()
+            .map(|body| {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                loop {
+                    let mut buffer = [0_u8; 4096];
+                    let length = stream.read(&mut buffer).unwrap();
+                    if length == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..length]);
+                    if request_complete(&request) {
+                        break;
+                    }
+                }
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).unwrap();
+                String::from_utf8_lossy(&request).into_owned()
+            })
+            .collect()
+    });
+    (format!("http://{address}"), handle)
+}
+
+fn session_json(id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "workspace_id": "ws_01",
+        "title": id,
+        "created_at": "2026-07-18T08:00:00.000Z",
+        "updated_at": "2026-07-18T08:00:00.000Z",
+        "busy": false,
+        "archived": false,
+        "metadata": { "cwd": "/tmp/project" },
+        "agent_config": { "model": "k3" },
+        "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "total_cost_usd": 0,
+            "context_tokens": 0,
+            "context_limit": 100000,
+            "turn_count": 0
+        },
+        "permission_rules": [],
+        "message_count": 0,
+        "last_seq": 0
+    })
 }
 
 fn one_binary_response(

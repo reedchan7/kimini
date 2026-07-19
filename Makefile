@@ -248,7 +248,7 @@ test: ## Run tests
 
 coverage-core: ## Enforce 90% line coverage for protocol and state logic
 	$(CARGO) llvm-cov --all-features --all-targets --summary-only \
-	  --ignore-filename-regex 'src/(api|bin|daemon|legacy_web|native)/|src/i18n\.rs' \
+	  --ignore-filename-regex 'src/(api|bin|daemon|i18n|legacy_web|native)/|src/i18n\.rs' \
 	  --fail-under-lines 90
 
 fmt: ## Format sources with rustfmt

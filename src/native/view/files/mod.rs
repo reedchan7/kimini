@@ -2,7 +2,7 @@ mod format;
 mod preview;
 mod tree;
 
-use gpui::{Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, input::Input};
 
 use crate::native::{app::Shell, theme::*};
@@ -21,8 +21,8 @@ impl Shell {
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(self.file_panel_header(cx))
             .child(
                 div().px_3().py_2().child(
@@ -45,8 +45,8 @@ impl Shell {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .text_xs()
-                    .text_color(rgb(TEXT_MUTED))
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(TEXT_MUTED))
                     .child(format!(
                         "{} · ↑{} ↓{}",
                         if git.branch.is_empty() {
@@ -72,10 +72,10 @@ impl Shell {
             .justify_between()
             .px_3()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .child(
                 div()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .font_semibold()
                     .child(self.strings.native.files),
             )

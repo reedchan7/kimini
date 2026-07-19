@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::protocol::{MessagePage, Page, Session, SessionSnapshot, SessionStatus};
 
 use super::{ApiError, KimiClient, segment};
@@ -12,6 +14,40 @@ impl KimiClient {
             "/sessions?before_id={}&page_size=100&include_archive=false",
             segment(session_id)
         ))
+    }
+
+    pub fn list_session_pages_before(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<Page<Session>>, ApiError> {
+        let mut pages = Vec::new();
+        let mut cursor = session_id.to_owned();
+        let mut seen_cursors = HashSet::from([cursor.clone()]);
+
+        loop {
+            let mut page = self.list_sessions_before(&cursor)?;
+            let has_more = page.has_more;
+            let next_cursor = page.items.last().map(|session| session.id.clone());
+
+            if !has_more {
+                pages.push(page);
+                break;
+            }
+            let Some(next_cursor) = next_cursor else {
+                page.has_more = false;
+                pages.push(page);
+                break;
+            };
+            if !seen_cursors.insert(next_cursor.clone()) {
+                page.has_more = false;
+                pages.push(page);
+                break;
+            }
+            pages.push(page);
+            cursor = next_cursor;
+        }
+
+        Ok(pages)
     }
 
     pub fn list_archived_sessions(&self) -> Result<Page<Session>, ApiError> {

@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*};
 use gpui_component::{StyledExt, text::TextView};
 
 use crate::protocol::ApprovalRequest;
@@ -31,19 +31,19 @@ pub(super) fn render(
                 .mb_2()
                 .rounded_lg()
                 .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(SURFACE))
+                .border_color(theme_rgb(BORDER))
+                .bg(theme_rgb(SURFACE))
                 .p_3()
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(font_px(13.0))
                         .font_semibold()
                         .child(format!("{} · {}", approval.tool_name, approval.action)),
                 )
                 .children(input.map(|input| {
                     TextView::markdown(("approval-input", index), input)
                         .selectable(true)
-                        .text_sm()
+                        .text_size(font_px(13.0))
                 }))
                 .child(
                     div()
@@ -74,8 +74,8 @@ pub(super) fn render(
                                 shell.strings.native.approve_session,
                                 ("approve-session", index),
                             )
-                            .bg(rgb(ACCENT))
-                            .text_color(rgb(SURFACE))
+                            .bg(theme_rgb(ACCENT))
+                            .text_color(theme_rgb(SURFACE))
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
                                     this.resolve_approval(session_id.clone(), true, true, cx)

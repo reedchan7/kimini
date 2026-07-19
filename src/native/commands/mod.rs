@@ -1,5 +1,6 @@
 mod archive;
 mod auth;
+pub(in crate::native) mod config;
 mod export;
 mod files;
 mod goals;
@@ -23,6 +24,9 @@ use super::app::{LoadState, Shell};
 
 impl Shell {
     fn active_request_context(&self) -> Option<(KimiClient, String)> {
+        if self.new_session_draft.is_some() {
+            return None;
+        }
         Some((
             self.client.clone()?,
             self.model.active_session()?.id.clone(),
@@ -44,9 +48,11 @@ impl Shell {
     }
 
     fn is_active_session(&self, session_id: &str) -> bool {
-        self.model
-            .active_session()
-            .is_some_and(|session| session.id == session_id)
+        self.new_session_draft.is_none()
+            && self
+                .model
+                .active_session()
+                .is_some_and(|session| session.id == session_id)
     }
 
     fn fail(&mut self, error: String, cx: &mut Context<Self>) {

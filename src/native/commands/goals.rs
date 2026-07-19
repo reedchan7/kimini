@@ -50,6 +50,9 @@ impl Shell {
     }
 
     pub(in crate::native) fn toggle_goal_mode(&mut self, cx: &mut Context<Self>) {
+        if self.new_session_draft.is_some() {
+            return;
+        }
         let Some(session_id) = self
             .model
             .active_session()

@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*};
 use gpui_component::StyledExt;
 
 use crate::native::{app::Shell, theme::*};
@@ -7,8 +7,14 @@ use crate::native::{skills::SkillSuggestion, slash::SlashCommand};
 impl Shell {
     pub(super) fn slash_suggestions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let input = self.composer.read(cx).value();
+        let new_session = self.new_session_draft.is_some();
         let mut suggestions = SlashCommand::suggestions(input.as_ref(), 8)
             .into_iter()
+            .filter(|command| {
+                !new_session
+                    || SlashCommand::parse(command)
+                        .is_some_and(|command| command.available_in_new_session())
+            })
             .map(|command| SkillSuggestion {
                 command: command.into(),
                 name: command.trim_start_matches('/').into(),
@@ -27,8 +33,8 @@ impl Shell {
                 .mb_2()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(CANVAS))
+                .border_color(theme_rgb(BORDER))
+                .bg(theme_rgb(CANVAS))
                 .p_1()
                 .children(
                     suggestions
@@ -49,7 +55,7 @@ impl Shell {
                                 .rounded_md()
                                 .px_2()
                                 .py_1()
-                                .hover(|item| item.bg(rgb(SURFACE_ACTIVE)))
+                                .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.composer.update(cx, |input, cx| {
                                         input.set_value(command.clone(), window, cx);
@@ -63,7 +69,7 @@ impl Shell {
                                         .gap_2()
                                         .child(
                                             div()
-                                                .text_sm()
+                                                .text_size(font_px(13.0))
                                                 .font_semibold()
                                                 .child(suggestion.command),
                                         )
@@ -71,8 +77,8 @@ impl Shell {
                                             div()
                                                 .min_w_0()
                                                 .flex_1()
-                                                .text_xs()
-                                                .text_color(rgb(TEXT_MUTED))
+                                                .text_size(font_px(12.0))
+                                                .text_color(theme_rgb(TEXT_MUTED))
                                                 .line_clamp(1)
                                                 .child(suggestion.description),
                                         ),

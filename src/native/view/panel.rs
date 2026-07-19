@@ -1,6 +1,6 @@
-use gpui::{ElementId, Role, div, prelude::*, rgb};
+use gpui::{ElementId, Role, div, prelude::*};
 
-use super::super::theme::SURFACE_ACTIVE;
+use super::super::theme::{SURFACE_ACTIVE, font_px, theme_rgb};
 
 pub(super) fn panel_button(
     label: &'static str,
@@ -16,7 +16,7 @@ pub(super) fn panel_button(
         .rounded_md()
         .px_2()
         .py_1()
-        .text_xs()
-        .hover(|button| button.bg(rgb(SURFACE_ACTIVE)))
+        .text_size(font_px(12.0))
+        .hover(|button| button.bg(theme_rgb(SURFACE_ACTIVE)))
         .child(label)
 }

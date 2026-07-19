@@ -84,7 +84,7 @@ impl Shell {
         let request_session_id = session_id.clone();
         let task = cx.background_spawn(async move { client.list_terminals(&session_id) });
         cx.spawn(async move |this, cx| {
-            let result = task.await.map_err(|error| error.to_string());
+            let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 if !this.is_active_session(&request_session_id) {
                     return;
@@ -99,7 +99,10 @@ impl Shell {
                             this.create_terminal(cx);
                         }
                     }
-                    Err(error) => this.terminals.fail(&request_session_id, error),
+                    Err(error) if terminal_backend_unavailable(&error) => {
+                        this.create_local_terminal(&request_session_id, error.to_string());
+                    }
+                    Err(error) => this.terminals.fail(&request_session_id, error.to_string()),
                 }
                 cx.notify();
             });
@@ -370,16 +373,17 @@ impl Shell {
 }
 
 fn terminal_backend_unavailable(error: &ApiError) -> bool {
-    let ApiError::Daemon { message, .. } = error else {
-        return false;
-    };
-    [
-        "spawn is not a function",
-        "Failed to load native module: pty.node",
-        "ERR_UNKNOWN_BUILTIN_MODULE",
-    ]
-    .iter()
-    .any(|needle| message.contains(needle))
+    match error {
+        ApiError::Transport(_) | ApiError::InvalidResponse(_) => true,
+        ApiError::Daemon { message, .. } => [
+            "spawn is not a function",
+            "Failed to load native module: pty.node",
+            "ERR_UNKNOWN_BUILTIN_MODULE",
+        ]
+        .iter()
+        .any(|needle| message.contains(needle)),
+        ApiError::LocalFile(_) | ApiError::MissingData => false,
+    }
 }
 
 #[cfg(test)]
@@ -401,5 +405,11 @@ mod tests {
             code: 50_001,
             message: "permission denied".into(),
         }));
+        assert!(terminal_backend_unavailable(&ApiError::Transport(
+            "Connection reset by peer".into(),
+        )));
+        assert!(terminal_backend_unavailable(&ApiError::InvalidResponse(
+            "terminal route closed early".into(),
+        )));
     }
 }

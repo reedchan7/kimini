@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, input::Input};
 
 use crate::{
@@ -33,22 +33,22 @@ impl Shell {
                     .gap_2()
                     .child(
                         div()
-                            .text_size(px(11.0))
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(13.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(workspace_label(&session.metadata.cwd)),
                     )
                     .child(
                         div()
-                            .text_size(px(11.0))
-                            .text_color(rgb(BORDER_STRONG))
+                            .text_size(font_px(13.0))
+                            .text_color(theme_rgb(BORDER_STRONG))
                             .child("/"),
                     )
                     .child(
                         div()
-                            .max_w(px(360.))
+                            .max_w(px(460.))
                             .line_clamp(1)
-                            .text_size(px(12.0))
-                            .font_semibold()
+                            .text_size(font_px(13.0))
+                            .font_medium()
                             .child(title),
                     )
                     .into_any_element()

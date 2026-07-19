@@ -78,6 +78,12 @@ impl Shell {
         self.fetch_archived_sessions(before, cx);
     }
 
+    pub(in crate::native) fn ensure_archived_sessions_loaded(&mut self, cx: &mut Context<Self>) {
+        if !self.model.archived_sessions_loaded() && !self.archives_loading {
+            self.fetch_archived_sessions(None, cx);
+        }
+    }
+
     fn fetch_archived_sessions(&mut self, before: Option<String>, cx: &mut Context<Self>) {
         let Some(client) = self.client.clone() else {
             return;

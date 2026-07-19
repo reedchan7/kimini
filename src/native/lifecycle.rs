@@ -29,9 +29,17 @@ impl Shell {
             Ok(bootstrap) => {
                 self.client = Some(KimiClient::new(bootstrap.connection.clone()));
                 self.connection = Some(bootstrap.connection);
+                self.server_meta = bootstrap.meta;
+                self.auth.summary = bootstrap.auth;
+                match bootstrap.config {
+                    Ok(config) => self.install_daemon_config(config),
+                    Err(error) => {
+                        self.daemon_config = None;
+                        self.config_error = Some(error);
+                    }
+                }
                 self.model.replace_session_page(bootstrap.sessions);
                 self.models = bootstrap.models;
-                self.auth.summary = bootstrap.auth;
                 if let Some(active) = bootstrap.active {
                     self.install_snapshot(active, cx);
                 }
@@ -67,6 +75,8 @@ impl Shell {
         self.transcript.rebuild(&self.model);
         if self.utility_panel == Some(UtilityPanel::Files) {
             self.refresh_workspace_files(cx);
+        } else {
+            self.refresh_workspace_git_status(cx);
         }
         if self.utility_panel == Some(UtilityPanel::Skills) {
             self.refresh_skills(cx);
@@ -176,6 +186,17 @@ impl Shell {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        self.store_active_composer_draft(cx);
+        if let Some(draft) = self.new_session_draft.take()
+            && !draft.submitting
+        {
+            let key = draft.key();
+            self.attachments.discard_session(&key);
+            self.drafts.remove(&key);
+        }
+        self.composer_menu = None;
+        self.draft_workspace_menu_open = false;
+        self.draft_workspace_show_all = false;
         self.renaming_session = false;
         self.load_snapshot(session_id, cx);
         self.composer
@@ -189,6 +210,15 @@ impl Shell {
     }
 
     pub(super) fn load_snapshot(&mut self, session_id: String, cx: &mut Context<Self>) {
+        self.load_snapshot_with_notice(session_id, None, cx);
+    }
+
+    pub(super) fn load_snapshot_with_notice(
+        &mut self,
+        session_id: String,
+        notice: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(client) = self.client.clone() else {
             return;
         };
@@ -207,7 +237,10 @@ impl Shell {
                 match result {
                     Ok(loaded) => {
                         this.install_snapshot(loaded, cx);
-                        this.state = LoadState::Ready;
+                        this.state = notice
+                            .clone()
+                            .map(LoadState::Failed)
+                            .unwrap_or(LoadState::Ready);
                     }
                     Err(error) => this.state = LoadState::Failed(error),
                 }

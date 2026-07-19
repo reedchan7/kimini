@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, IntoElement, Role, div, list, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, IntoElement, Role, div, list, prelude::*, px};
 use gpui_component::scroll::ScrollableElement;
 
 use crate::{
@@ -19,15 +19,19 @@ impl Shell {
             .relative()
             .border_t_1()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .when(self.files.rows.is_empty(), |tree| {
-                tree.child(div().p_4().text_sm().text_color(rgb(TEXT_MUTED)).child(
-                    if self.files.loading {
-                        self.strings.native.loading_files
-                    } else {
-                        self.strings.native.no_files
-                    },
-                ))
+                tree.child(
+                    div()
+                        .p_4()
+                        .text_size(font_px(13.0))
+                        .text_color(theme_rgb(TEXT_MUTED))
+                        .child(if self.files.loading {
+                            self.strings.native.loading_files
+                        } else {
+                            self.strings.native.no_files
+                        }),
+                )
             })
             .when(!self.files.rows.is_empty(), |tree| {
                 tree.child(
@@ -67,16 +71,16 @@ impl Shell {
             .flex()
             .items_center()
             .gap_2()
-            .bg(rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
-            .hover(|item| item.bg(rgb(SURFACE_ACTIVE)))
+            .bg(theme_rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
+            .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.activate_file_row(path.clone(), directory, cx)
             }))
             .child(
                 div()
                     .w(px(12.0))
-                    .text_xs()
-                    .text_color(rgb(TEXT_MUTED))
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(TEXT_MUTED))
                     .child(if directory {
                         if row.expanded { "▾" } else { "▸" }
                     } else {
@@ -87,14 +91,14 @@ impl Shell {
                 div()
                     .min_w_0()
                     .flex_1()
-                    .text_sm()
+                    .text_size(font_px(13.0))
                     .line_clamp(1)
                     .child(row.name),
             )
             .children(row.git_status.map(|status| {
                 div()
-                    .text_xs()
-                    .text_color(rgb(git_status_color(status)))
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(git_status_color(status)))
                     .child(git_status_badge(status))
             }))
             .into_any_element()
@@ -126,7 +130,7 @@ fn git_status_badge(status: FsGitStatus) -> &'static str {
     }
 }
 
-fn git_status_color(status: FsGitStatus) -> u32 {
+fn git_status_color(status: FsGitStatus) -> ColorToken {
     match status {
         FsGitStatus::Conflicted | FsGitStatus::Deleted => ERROR,
         FsGitStatus::Clean | FsGitStatus::Ignored => TEXT_MUTED,

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use gpui::{ListAlignment, ListState, px};
 
 use crate::protocol::Session;
@@ -12,6 +13,7 @@ pub(super) struct SidebarSession {
     pub id: String,
     pub title: String,
     pub cwd: String,
+    pub updated_at: String,
     pub busy: bool,
     pub position: usize,
 }
@@ -153,6 +155,41 @@ pub(super) fn display_title(title: &str) -> String {
         .to_owned()
 }
 
+pub(super) fn relative_time(updated_at: &str, just_now: &str) -> String {
+    relative_time_at(updated_at, Utc::now(), just_now)
+}
+
+fn relative_time_at(updated_at: &str, now: DateTime<Utc>, just_now: &str) -> String {
+    let Ok(updated_at) = DateTime::parse_from_rfc3339(updated_at) else {
+        return String::new();
+    };
+    let seconds = now
+        .signed_duration_since(updated_at.with_timezone(&Utc))
+        .num_seconds()
+        .max(0) as f64;
+    if seconds < 60.0 {
+        return just_now.to_owned();
+    }
+    let hours = seconds / 3_600.0;
+    if hours < 1.0 {
+        return format!("{}m", (seconds / 60.0).round() as u64);
+    }
+    if hours < 24.0 {
+        return format!("{}h", hours.round() as u64);
+    }
+    let days = seconds / 86_400.0;
+    if days < 7.0 {
+        return format!("{}d", days.round() as u64);
+    }
+    if days < 30.0 {
+        return format!("{}w", (days / 7.0).round() as u64);
+    }
+    if days < 365.0 {
+        return format!("{}mo", (days / 30.0).round() as u64);
+    }
+    format!("{}y", (days / 365.0).round() as u64)
+}
+
 fn flattened_rows(
     sessions: &[Session],
     query: &str,
@@ -239,6 +276,7 @@ fn grouped_sessions(sessions: &[Session], query: &str) -> Vec<SessionGroup> {
             id: session.id.clone(),
             title: display_title(&session.title),
             cwd: session.metadata.cwd.clone(),
+            updated_at: session.updated_at.clone(),
             busy: session.busy,
             position: 0,
         });
@@ -309,6 +347,18 @@ mod tests {
             display_title("``` Request changes\nmore"),
             "Request changes"
         );
+    }
+
+    #[test]
+    fn relative_times_follow_the_web_sidebar_buckets() {
+        let now = DateTime::parse_from_rfc3339("2026-07-19T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        assert_eq!(relative_time_at("2026-07-19T11:59:30Z", now, "now"), "now");
+        assert_eq!(relative_time_at("2026-07-19T11:30:00Z", now, "now"), "30m");
+        assert_eq!(relative_time_at("2026-07-18T17:00:00Z", now, "now"), "19h");
+        assert_eq!(relative_time_at("2026-07-15T12:00:00Z", now, "now"), "4d");
+        assert_eq!(relative_time_at("2026-07-05T12:00:00Z", now, "now"), "2w");
     }
 
     #[test]

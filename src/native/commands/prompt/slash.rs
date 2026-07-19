@@ -2,7 +2,7 @@ use gpui::{Context, Window};
 
 use crate::native::slash::SlashCommand;
 
-use super::super::super::app::{Shell, UtilityPanel};
+use super::super::super::app::{SettingsTab, Shell};
 
 impl Shell {
     pub(super) fn run_slash_command(
@@ -12,18 +12,14 @@ impl Shell {
         cx: &mut Context<Self>,
     ) {
         match command {
-            SlashCommand::New => self.choose_session_workspace(cx),
+            SlashCommand::New => self.begin_new_session(window, cx),
             SlashCommand::Fork => self.fork_active_session(cx),
             SlashCommand::Export => self.export_active_session(cx),
             SlashCommand::Undo => self.confirm_undo(window, cx),
             SlashCommand::Plan => self.toggle_plan_mode(cx),
             SlashCommand::Permission(mode) => self.set_permission(mode.into(), cx),
             SlashCommand::Thinking => self.cycle_thinking(cx),
-            SlashCommand::Login => {
-                if self.utility_panel != Some(UtilityPanel::Auth) {
-                    self.toggle_auth_panel(cx);
-                }
-            }
+            SlashCommand::Login => self.open_auth_panel(SettingsTab::Account, cx),
             SlashCommand::Compact(None) => self.confirm_compact(window, cx),
             SlashCommand::Compact(Some(instruction)) => {
                 self.compact_active_session(Some(instruction), cx)

@@ -1,7 +1,7 @@
 mod approval;
 mod question;
 
-use gpui::{Context, IntoElement, Role, div, prelude::*, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*};
 
 use super::super::app::Shell;
 use super::super::theme::*;
@@ -41,9 +41,9 @@ fn action_button(
         .cursor_pointer()
         .rounded_md()
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(theme_rgb(BORDER))
         .px_3()
         .py_1()
-        .text_sm()
+        .text_size(font_px(13.0))
         .child(label)
 }

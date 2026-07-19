@@ -65,6 +65,29 @@ impl Shell {
         .detach();
     }
 
+    pub(in crate::native) fn refresh_workspace_git_status(&mut self, cx: &mut Context<Self>) {
+        let Some((client, session_id)) = self.active_request_context() else {
+            return;
+        };
+        self.files.ensure_session(&session_id);
+        let generation = self.files.generation;
+        let request_session = session_id.clone();
+        let task = cx.background_spawn(async move { client.workspace_git_status(&session_id) });
+        cx.spawn(async move |this, cx| {
+            let git = task.await.ok();
+            let _ = this.update(cx, |this, cx| {
+                if generation != this.files.generation
+                    || this.files.current_session() != Some(request_session.as_str())
+                {
+                    return;
+                }
+                this.files.replace_git_status(git);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     pub(in crate::native) fn activate_file_row(
         &mut self,
         path: String,

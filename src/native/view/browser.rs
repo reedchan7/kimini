@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, Role, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, Role, div, prelude::*, px};
 use gpui_component::input::{Input, InputContentType};
 
 use super::super::app::Shell;
@@ -26,8 +26,8 @@ impl Shell {
                     .gap_2()
                     .px_3()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
-                    .bg(rgb(SURFACE))
+                    .border_color(theme_rgb(BORDER))
+                    .bg(theme_rgb(SURFACE))
                     .child(
                         browser_button(self.strings.back, "browser-back")
                             .on_click(cx.listener(|this, _, _, cx| this.browser_back(cx))),
@@ -62,8 +62,8 @@ impl Shell {
                         .flex_none()
                         .px_3()
                         .py_2()
-                        .text_xs()
-                        .text_color(rgb(ERROR))
+                        .text_size(font_px(12.0))
+                        .text_color(theme_rgb(ERROR))
                         .child(error),
                 )
             })
@@ -89,10 +89,10 @@ fn browser_button(label: &'static str, id: &'static str) -> gpui::Stateful<gpui:
         .cursor_pointer()
         .rounded_md()
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(theme_rgb(BORDER))
         .px_3()
         .py_1()
-        .text_sm()
-        .hover(|item| item.bg(rgb(SURFACE_ACTIVE)))
+        .text_size(font_px(13.0))
+        .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
         .child(label)
 }

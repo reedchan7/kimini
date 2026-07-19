@@ -8,6 +8,7 @@ mod draft;
 mod files;
 mod goals;
 mod lifecycle;
+mod preferences;
 mod presentation;
 mod prompt_queue;
 mod prompt_runtime;
@@ -27,6 +28,8 @@ gpui::actions!(
     [
         FocusNext,
         FocusPrevious,
+        FocusSessionSearch,
+        NewSession,
         RenameSession,
         ForkSession,
         CompactSession,
@@ -37,7 +40,16 @@ gpui::actions!(
         ToggleTasks,
         ToggleFiles,
         ToggleSkills,
-        ToggleTerminal
+        ToggleTerminal,
+        TogglePlanMode,
+        ToggleSwarmMode,
+        ToggleGoalMode,
+        ToggleSideChat,
+        ToggleBrowser,
+        ToggleSidebar,
+        SessionSearchNext,
+        SessionSearchPrevious,
+        CloseSessionSearch
     ]
 );
 

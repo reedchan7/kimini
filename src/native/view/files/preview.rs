@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Div, IntoElement, Role, Stateful, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Div, IntoElement, Role, Stateful, div, prelude::*, px};
 use gpui_component::{StyledExt, scroll::ScrollableElement, text::TextView};
 
 use crate::native::{
@@ -33,11 +33,11 @@ impl Shell {
                     .justify_between()
                     .px_3()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(theme_rgb(BORDER))
                     .child(
                         div()
                             .min_w_0()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .font_semibold()
                             .line_clamp(1)
                             .child(
@@ -88,21 +88,26 @@ impl Shell {
                     .overflow_y_scrollbar()
                     .p_3()
                     .when_some(self.files.error.clone(), |body, error| {
-                        body.child(div().text_xs().text_color(rgb(ERROR)).child(error))
+                        body.child(
+                            div()
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(ERROR))
+                                .child(error),
+                        )
                     })
                     .when(self.files.preview_loading, |body| {
                         body.child(
                             div()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(self.strings.native.loading_file),
                         )
                     })
                     .when(!self.files.preview_loading && preview.is_none(), |body| {
                         body.child(
                             div()
-                                .text_sm()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(13.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(self.strings.native.select_file),
                         )
                     })
@@ -120,7 +125,7 @@ impl Shell {
                                             diff_markdown(&diff.diff),
                                         )
                                         .selectable(true)
-                                        .text_xs()
+                                        .text_size(font_px(12.0))
                                         .into_any_element()
                                     })
                                     .unwrap_or_else(|| self.source_preview(item)),
@@ -133,8 +138,8 @@ impl Shell {
     fn source_preview(&self, preview: &FilePreview) -> AnyElement {
         if preview.file.is_binary || preview.file.encoding == "base64" {
             return div()
-                .text_sm()
-                .text_color(rgb(TEXT_MUTED))
+                .text_size(font_px(13.0))
+                .text_color(theme_rgb(TEXT_MUTED))
                 .child(format!(
                     "{} · {} · {} bytes",
                     self.strings.native.binary_file, preview.file.mime, preview.file.size
@@ -143,11 +148,11 @@ impl Shell {
         }
         TextView::markdown("workspace-source", source_markdown(&preview.file))
             .selectable(true)
-            .text_xs()
+            .text_size(font_px(12.0))
             .into_any_element()
     }
 }
 
 fn preview_mode_button(label: &'static str, id: &'static str, active: bool) -> Stateful<Div> {
-    panel_button(label, id).bg(rgb(if active { SURFACE_ACTIVE } else { SURFACE }))
+    panel_button(label, id).bg(theme_rgb(if active { SURFACE_ACTIVE } else { SURFACE }))
 }

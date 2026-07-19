@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*};
 use gpui_component::StyledExt;
 
 use super::super::app::Shell;
@@ -22,8 +22,8 @@ impl Shell {
             .mb_3()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(
                 div()
                     .flex()
@@ -32,12 +32,12 @@ impl Shell {
                     .px_3()
                     .py_2()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(theme_rgb(BORDER))
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(font_px(12.0))
                             .font_semibold()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(format!(
                                 "{} · {}",
                                 self.strings.native.queued_prompts,
@@ -74,19 +74,23 @@ impl Shell {
                     .gap_2()
                     .px_3()
                     .py_2()
-                    .when(index > 0, |row| row.border_t_1().border_color(rgb(BORDER)))
+                    .when(index > 0, |row| {
+                        row.border_t_1().border_color(theme_rgb(BORDER))
+                    })
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_sm()
+                            .text_size(font_px(13.0))
                             .line_clamp(1)
                             .child(accessible_text),
                     )
-                    .children(
-                        attachment_text
-                            .map(|text| div().text_xs().text_color(rgb(TEXT_MUTED)).child(text)),
-                    )
+                    .children(attachment_text.map(|text| {
+                        div()
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
+                            .child(text)
+                    }))
                     .child(
                         queue_button(
                             self.strings.native.remove_from_queue,
@@ -112,7 +116,7 @@ fn queue_button(label: &'static str, id: impl Into<gpui::ElementId>) -> gpui::St
         .rounded_md()
         .px_2()
         .py_1()
-        .text_xs()
-        .hover(|button| button.bg(rgb(SURFACE_ACTIVE)))
+        .text_size(font_px(12.0))
+        .hover(|button| button.bg(theme_rgb(SURFACE_ACTIVE)))
         .child(label)
 }

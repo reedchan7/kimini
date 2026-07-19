@@ -1,8 +1,8 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*, px};
 use gpui_component::{Icon, IconName, Sizable as _, StyledExt};
 
 use super::super::app::Shell;
-use super::super::session_list::{SessionListRow, SidebarSession};
+use super::super::session_list::{SessionListRow, SidebarSession, relative_time};
 use super::super::theme::*;
 
 impl Shell {
@@ -58,9 +58,9 @@ impl Shell {
             .aria_size_of_set(visible_count)
             .rounded_md()
             .px_2()
-            .py_1()
-            .when(selected, |item| item.bg(rgb(SURFACE_ACTIVE)))
-            .hover(|item| item.bg(rgb(SURFACE_ACTIVE)));
+            .py_2()
+            .when(selected, |item| item.bg(theme_rgb(SURFACE_ACTIVE)))
+            .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)));
 
         if archived {
             row.child(
@@ -69,7 +69,13 @@ impl Shell {
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .child(div().min_w_0().text_sm().line_clamp(1).child(title))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_size(font_px(13.0))
+                            .line_clamp(1)
+                            .child(title),
+                    )
                     .child(
                         div()
                             .id(("restore-session", session.position))
@@ -81,8 +87,8 @@ impl Shell {
                             .rounded_md()
                             .px_2()
                             .py_1()
-                            .text_xs()
-                            .text_color(rgb(ACCENT))
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(ACCENT))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.restore_archived_session(session_id.clone(), cx)
                             }))
@@ -99,37 +105,50 @@ impl Shell {
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap_1()
                         .child(
                             div()
-                                .size(px(5.0))
+                                .w(px(16.0))
+                                .h(px(12.0))
                                 .flex_none()
-                                .rounded_full()
-                                .bg(rgb(if session.busy { ACCENT } else { TEXT_MUTED })),
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(session.busy, |slot| {
+                                    slot.child(
+                                        div().size(px(7.0)).rounded_full().bg(theme_rgb(ACCENT)),
+                                    )
+                                }),
                         )
                         .child(
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .text_size(px(12.0))
+                                .text_size(font_px(12.0))
                                 .font_weight(if selected {
                                     gpui::FontWeight::MEDIUM
                                 } else {
                                     gpui::FontWeight::NORMAL
                                 })
-                                .text_color(rgb(if selected { TEXT } else { TEXT_SECONDARY }))
+                                .text_color(theme_rgb(TEXT))
                                 .line_clamp(1)
                                 .child(title),
+                        )
+                        .child(
+                            div()
+                                .min_w(px(26.0))
+                                .flex_none()
+                                .text_size(font_px(10.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
+                                .text_right()
+                                .child(relative_time(
+                                    &session.updated_at,
+                                    self.strings.native.session_just_now,
+                                )),
                         ),
                 )
                 .when(session.busy, |item| {
-                    item.child(
-                        div()
-                            .pl(px(13.0))
-                            .text_size(px(10.0))
-                            .text_color(rgb(ACCENT))
-                            .child(self.strings.native.working),
-                    )
+                    item.aria_description(self.strings.native.working)
                 })
                 .into_any_element()
         }
@@ -155,24 +174,32 @@ impl Shell {
             .px_2()
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .rounded_md()
-            .text_size(px(11.0))
+            .text_size(font_px(11.0))
             .font_semibold()
-            .text_color(rgb(TEXT_SECONDARY))
-            .hover(|row| row.bg(rgb(SURFACE_ACTIVE)))
+            .text_color(theme_rgb(TEXT_SECONDARY))
+            .hover(|row| row.bg(theme_rgb(SURFACE_ACTIVE)))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.session_list.toggle_workspace(&workspace_key);
                 cx.notify();
             }))
             .child(
-                Icon::new(if collapsed {
-                    IconName::FolderClosed
-                } else {
-                    IconName::FolderOpen
-                })
-                .xsmall()
-                .text_color(rgb(TEXT_MUTED)),
+                div()
+                    .w(px(16.0))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        Icon::new(if collapsed {
+                            IconName::FolderClosed
+                        } else {
+                            IconName::FolderOpen
+                        })
+                        .xsmall()
+                        .text_color(theme_rgb(TEXT_MUTED)),
+                    ),
             )
             .child(div().min_w_0().line_clamp(1).child(label))
             .into_any_element()
@@ -208,9 +235,12 @@ impl Shell {
             .flex()
             .items_center()
             .rounded_md()
-            .text_size(px(10.0))
-            .text_color(rgb(TEXT_MUTED))
-            .hover(|row| row.bg(rgb(SURFACE_ACTIVE)).text_color(rgb(TEXT_SECONDARY)))
+            .text_size(font_px(10.0))
+            .text_color(theme_rgb(TEXT_MUTED))
+            .hover(|row| {
+                row.bg(theme_rgb(SURFACE_ACTIVE))
+                    .text_color(theme_rgb(TEXT_SECONDARY))
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.session_list.toggle_expanded(&workspace_key);
                 cx.notify();

@@ -24,6 +24,18 @@ pub(super) enum GoalSlashCommand {
 }
 
 impl SlashCommand {
+    pub const fn available_in_new_session(&self) -> bool {
+        matches!(
+            self,
+            Self::New
+                | Self::Plan
+                | Self::Permission(_)
+                | Self::Thinking
+                | Self::Login
+                | Self::Swarm(_)
+        )
+    }
+
     pub fn suggestions(input: &str, limit: usize) -> Vec<&'static str> {
         const COMMANDS: [&str; 14] = [
             "/new",
@@ -138,5 +150,21 @@ mod tests {
             )))
         );
         assert!(SlashCommand::suggestions("/compact ", 5).is_empty());
+    }
+
+    #[test]
+    fn new_drafts_expose_only_commands_that_do_not_need_a_session() {
+        assert!(!SlashCommand::Fork.available_in_new_session());
+        assert!(!SlashCommand::Export.available_in_new_session());
+        assert!(!SlashCommand::Undo.available_in_new_session());
+        assert!(!SlashCommand::Compact(None).available_in_new_session());
+        assert!(!SlashCommand::Goal(GoalSlashCommand::Toggle).available_in_new_session());
+        assert!(!SlashCommand::Btw(None).available_in_new_session());
+        assert!(SlashCommand::New.available_in_new_session());
+        assert!(SlashCommand::Plan.available_in_new_session());
+        assert!(SlashCommand::Permission("auto").available_in_new_session());
+        assert!(SlashCommand::Thinking.available_in_new_session());
+        assert!(SlashCommand::Login.available_in_new_session());
+        assert!(SlashCommand::Swarm(None).available_in_new_session());
     }
 }

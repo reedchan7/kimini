@@ -2,22 +2,60 @@ use gpui::{AppContext, Context};
 
 use crate::api::ApiError;
 
-use super::super::app::{LoadState, Shell};
+use super::super::app::{DefaultPermission, LoadState, Shell};
+use super::super::prompt_runtime::thinking_segments;
 
 impl Shell {
     pub(in crate::native) fn set_model(&mut self, model: String, cx: &mut Context<Self>) {
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.model = model.clone();
+            if let Some(catalog) = self.models.iter().find(|item| item.model == model) {
+                let segments = thinking_segments(Some(catalog));
+                if !segments.iter().any(|segment| segment == &draft.thinking) {
+                    draft.thinking = catalog
+                        .default_effort
+                        .clone()
+                        .filter(|effort| segments.contains(effort))
+                        .or_else(|| segments.first().cloned())
+                        .unwrap_or_else(|| "off".into());
+                }
+            }
+            cx.notify();
+            return;
+        }
         self.update_runtime(serde_json::json!({ "model": model }), cx);
     }
 
     pub(in crate::native) fn set_thinking(&mut self, effort: String, cx: &mut Context<Self>) {
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.thinking = effort;
+            cx.notify();
+            return;
+        }
         self.update_runtime(serde_json::json!({ "thinking": effort }), cx);
     }
 
     pub(in crate::native) fn set_permission(&mut self, mode: String, cx: &mut Context<Self>) {
+        if let Some(permission) = DefaultPermission::from_mode(&mode) {
+            self.update_preferences(
+                |preferences| preferences.composer_permission = permission,
+                cx,
+            );
+        }
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.permission = mode;
+            cx.notify();
+            return;
+        }
         self.update_runtime(serde_json::json!({ "permission_mode": mode }), cx);
     }
 
     pub(in crate::native) fn toggle_plan_mode(&mut self, cx: &mut Context<Self>) {
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.plan_mode = !draft.plan_mode;
+            cx.notify();
+            return;
+        }
         let enabled = !self
             .model
             .active_runtime()
@@ -26,6 +64,11 @@ impl Shell {
     }
 
     pub(in crate::native) fn toggle_swarm_mode(&mut self, cx: &mut Context<Self>) {
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.swarm_mode = !draft.swarm_mode;
+            cx.notify();
+            return;
+        }
         let enabled = !self
             .model
             .active_runtime()
@@ -34,25 +77,36 @@ impl Shell {
     }
 
     pub(in crate::native) fn set_swarm_mode(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if let Some(draft) = self.new_session_draft.as_mut() {
+            draft.swarm_mode = enabled;
+            cx.notify();
+            return;
+        }
         self.update_runtime(serde_json::json!({ "swarm_mode": enabled }), cx);
     }
 
     pub(in crate::native) fn cycle_thinking(&mut self, cx: &mut Context<Self>) {
         let current = self
-            .model
-            .active_runtime()
-            .map(|runtime| runtime.thinking_level.as_str())
+            .new_session_draft
+            .as_ref()
+            .map(|draft| draft.thinking.as_str())
+            .or_else(|| {
+                self.model
+                    .active_runtime()
+                    .map(|runtime| runtime.thinking_level.as_str())
+            })
             .unwrap_or("off");
-        let mut efforts = self
-            .model
-            .active_runtime()
-            .and_then(|runtime| runtime.model.as_deref())
-            .and_then(|model| self.models.iter().find(|item| item.model == model))
-            .map(|model| model.support_efforts.clone())
-            .unwrap_or_else(|| vec!["off".into(), "on".into()]);
-        if !efforts.iter().any(|effort| effort == "off") {
-            efforts.insert(0, "off".into());
-        }
+        let model_id = self
+            .new_session_draft
+            .as_ref()
+            .map(|draft| draft.model.as_str())
+            .or_else(|| {
+                self.model
+                    .active_runtime()
+                    .and_then(|runtime| runtime.model.as_deref())
+            });
+        let model = model_id.and_then(|model| self.models.iter().find(|item| item.model == model));
+        let efforts = thinking_segments(model);
         let next = efforts
             .iter()
             .position(|effort| effort == current)

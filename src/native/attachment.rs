@@ -96,11 +96,28 @@ impl Attachments {
             drafts.retain(|draft| !matches!(draft.state, AttachmentState::Ready(_)));
         }
     }
+
+    pub fn move_session(&mut self, from: &str, to: &str) {
+        if let Some(items) = self.by_session.remove(from) {
+            self.by_session.entry(to.into()).or_default().extend(items);
+        }
+    }
+
+    pub fn discard_session(&mut self, session_id: &str) {
+        self.by_session.remove(session_id);
+    }
 }
 
 impl Shell {
     pub(super) fn choose_attachments(&mut self, cx: &mut Context<Self>) {
-        if self.model.active_session().is_none() {
+        if self
+            .new_session_draft
+            .as_ref()
+            .is_some_and(|draft| draft.submitting)
+        {
+            return;
+        }
+        if self.active_composer_key().is_none() {
             return;
         }
         let selection = cx.prompt_for_paths(PathPromptOptions {
@@ -119,14 +136,17 @@ impl Shell {
     }
 
     pub(super) fn add_attachment_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if self
+            .new_session_draft
+            .as_ref()
+            .is_some_and(|draft| draft.submitting)
+        {
+            return;
+        }
         let Some(client) = self.client.clone() else {
             return;
         };
-        let Some(session_id) = self
-            .model
-            .active_session()
-            .map(|session| session.id.clone())
-        else {
+        let Some(session_id) = self.active_composer_key() else {
             return;
         };
         for path in paths.into_iter().filter(|path| path.is_file()) {
@@ -155,11 +175,7 @@ impl Shell {
     }
 
     pub(super) fn remove_attachment(&mut self, id: u64, cx: &mut Context<Self>) {
-        if let Some(session_id) = self
-            .model
-            .active_session()
-            .map(|session| session.id.clone())
-        {
+        if let Some(session_id) = self.active_composer_key() {
             self.attachments.remove(&session_id, id);
             cx.notify();
         }
@@ -196,5 +212,30 @@ mod tests {
         attachments.clear_sent("one");
         assert!(attachments.for_session("one").is_empty());
         assert_eq!(attachments.for_session("two").len(), 1);
+    }
+
+    #[test]
+    fn moving_a_new_draft_keeps_ready_attachments_for_the_created_session() {
+        let mut attachments = Attachments::default();
+        let id = attachments.add_upload("new:7", "notes.pdf".into());
+        attachments.finish("new:7", id, Ok(file("file-1")));
+
+        attachments.move_session("new:7", "session-1");
+
+        assert!(attachments.for_session("new:7").is_empty());
+        assert_eq!(attachments.prompt_parts("session-1", "retry").len(), 2);
+    }
+
+    #[test]
+    fn discarding_a_completed_new_draft_removes_every_attachment_state() {
+        let mut attachments = Attachments::default();
+        let ready = attachments.add_upload("new:7", "ready.pdf".into());
+        attachments.finish("new:7", ready, Ok(file("file-1")));
+        let failed = attachments.add_upload("new:7", "failed.pdf".into());
+        attachments.finish("new:7", failed, Err("upload failed".into()));
+
+        attachments.discard_session("new:7");
+
+        assert!(attachments.for_session("new:7").is_empty());
     }
 }

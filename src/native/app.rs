@@ -2,8 +2,9 @@ use std::collections::HashSet;
 
 use gpui::{AppContext, Context, Entity, ScrollHandle, Subscription, Window};
 use gpui_component::input::{InputEvent, InputState};
+use serde::{Deserialize, Serialize};
 
-use crate::api::{EventSocket, KimiClient};
+use crate::api::{EventSocket, KimiClient, KimiConfig, ServerMeta};
 use crate::daemon::Connection;
 use crate::i18n::{Lang, Strings};
 use crate::model::AppModel;
@@ -23,6 +24,7 @@ use super::side_chat::SideChats;
 use super::skills::SkillCatalogState;
 use super::tasks::TaskRosters;
 use super::terminal::{LocalTerminalHost, Terminals};
+use super::theme;
 
 #[derive(Debug, Clone)]
 pub(super) enum LoadState {
@@ -43,11 +45,116 @@ pub(super) enum UtilityPanel {
     Terminal,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum SettingsTab {
+    #[default]
+    General,
+    Agent,
+    Account,
+    Advanced,
+    Archived,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum AppearanceMode {
+    MoonBright,
+    MoonDark,
+    #[default]
+    System,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum AccentMode {
+    #[default]
+    Blue,
+    Black,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum DefaultPermission {
+    Manual,
+    Auto,
+    #[default]
+    Yolo,
+}
+
+impl DefaultPermission {
+    pub(super) fn from_mode(mode: &str) -> Option<Self> {
+        match mode {
+            "manual" => Some(Self::Manual),
+            "auto" => Some(Self::Auto),
+            "yolo" => Some(Self::Yolo),
+            _ => None,
+        }
+    }
+
+    pub(super) const fn as_mode(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Auto => "auto",
+            Self::Yolo => "yolo",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(super) struct NativePreferences {
+    pub(super) appearance: AppearanceMode,
+    pub(super) accent: AccentMode,
+    pub(super) font_size: u8,
+    pub(super) conversation_outline: bool,
+    pub(super) composer_permission: DefaultPermission,
+}
+
+impl Default for NativePreferences {
+    fn default() -> Self {
+        Self {
+            appearance: AppearanceMode::System,
+            accent: AccentMode::Blue,
+            font_size: 14,
+            conversation_outline: true,
+            composer_permission: DefaultPermission::Manual,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ComposerMenu {
+    Permission,
+    Modes,
+    Model,
+    AllModels,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct NewSessionDraft {
+    pub(super) id: u64,
+    pub(super) cwd: String,
+    pub(super) model: String,
+    pub(super) thinking: String,
+    pub(super) permission: String,
+    pub(super) plan_mode: bool,
+    pub(super) swarm_mode: bool,
+    pub(super) submitting: bool,
+}
+
+impl NewSessionDraft {
+    pub(super) fn key(&self) -> String {
+        format!("new:{}", self.id)
+    }
+}
+
 pub(super) struct Shell {
     pub(super) lang: Lang,
     pub(super) strings: Strings,
     pub(super) composer: Entity<InputState>,
     pub(super) session_search: Entity<InputState>,
+    pub(super) session_search_open: bool,
+    pub(super) session_search_selected: usize,
     pub(super) file_search: Entity<InputState>,
     pub(super) rename_editor: Entity<InputState>,
     pub(super) browser_address: Entity<InputState>,
@@ -65,6 +172,10 @@ pub(super) struct Shell {
     pub(super) preview_thinking: Option<String>,
     pub(super) client: Option<KimiClient>,
     pub(super) connection: Option<Connection>,
+    pub(super) server_meta: Option<ServerMeta>,
+    pub(super) daemon_config: Option<KimiConfig>,
+    pub(super) config_error: Option<String>,
+    pub(super) config_saving: bool,
     pub(super) socket: Option<EventSocket>,
     pub(super) socket_generation: u64,
     pub(super) bootstrap_generation: u64,
@@ -72,6 +183,14 @@ pub(super) struct Shell {
     pub(super) sessions_loading: bool,
     pub(super) archives_loading: bool,
     pub(super) show_archived: bool,
+    pub(super) sidebar_collapsed: bool,
+    pub(super) settings_tab: SettingsTab,
+    pub(super) preferences: NativePreferences,
+    pub(super) composer_menu: Option<ComposerMenu>,
+    pub(super) new_session_draft: Option<NewSessionDraft>,
+    pub(super) new_session_generation: u64,
+    pub(super) draft_workspace_menu_open: bool,
+    pub(super) draft_workspace_show_all: bool,
     pub(super) history_loading: bool,
     pub(super) renaming_session: bool,
     pub(super) composer_session_id: Option<String>,
@@ -101,6 +220,7 @@ impl Shell {
     pub(super) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let lang = Lang::resolve();
         let strings = lang.strings();
+        let preferences = NativePreferences::load();
         let startup_browser_url = std::env::var("KIMINI_BROWSER_URL").ok();
         let initial_browser_address = startup_browser_url
             .clone()
@@ -138,7 +258,7 @@ impl Shell {
                 .submit_on_enter(true)
                 .placeholder(strings.native.terminal_placeholder)
         });
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe_in(
                 &composer,
                 window,
@@ -151,11 +271,19 @@ impl Shell {
                     }
                 },
             ),
-            cx.subscribe(&session_search, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            }),
+            cx.subscribe_in(
+                &session_search,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.session_search_selected = 0;
+                        cx.notify();
+                    }
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.activate_session_search_selection(window, cx);
+                    }
+                },
+            ),
             cx.subscribe(&file_search, |this, input, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) && input.read(cx).value().trim().is_empty() {
                     this.files.clear_search();
@@ -202,11 +330,19 @@ impl Shell {
                 },
             ),
         ];
+        subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
+            if this.preferences.appearance == AppearanceMode::System {
+                theme::apply(&this.preferences, window.appearance(), cx);
+                cx.notify();
+            }
+        }));
         let mut shell = Self {
             lang,
             strings,
             composer,
             session_search,
+            session_search_open: false,
+            session_search_selected: 0,
             file_search,
             rename_editor,
             browser_address,
@@ -224,6 +360,10 @@ impl Shell {
             preview_thinking: None,
             client: None,
             connection: None,
+            server_meta: None,
+            daemon_config: None,
+            config_error: None,
+            config_saving: false,
             socket: None,
             socket_generation: 0,
             bootstrap_generation: 0,
@@ -231,6 +371,14 @@ impl Shell {
             sessions_loading: false,
             archives_loading: false,
             show_archived: false,
+            sidebar_collapsed: false,
+            settings_tab: SettingsTab::default(),
+            preferences,
+            composer_menu: None,
+            new_session_draft: None,
+            new_session_generation: 0,
+            draft_workspace_menu_open: false,
+            draft_workspace_show_all: false,
             history_loading: false,
             renaming_session: false,
             composer_session_id: None,

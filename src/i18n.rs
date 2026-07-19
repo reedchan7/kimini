@@ -8,9 +8,11 @@
 //!
 //! Chinese copy lives only in [`Strings::zh`]. Product docs stay English.
 
-use std::env;
-use std::fs;
-use std::path::PathBuf;
+mod locale;
+
+#[cfg(feature = "native")]
+pub(crate) use locale::config_dir;
+pub use locale::{load_preference, save_preference};
 
 /// Supported UI languages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,66 +22,6 @@ pub enum Lang {
 }
 
 impl Lang {
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::En => "en",
-            Self::Zh => "zh",
-        }
-    }
-
-    /// Parse a BCP-47 / locale-ish tag into a supported language.
-    pub fn parse_tag(raw: &str) -> Option<Self> {
-        let s = raw.trim();
-        if s.is_empty() {
-            return None;
-        }
-        let primary = s
-            .split(['_', '-', '.'])
-            .next()
-            .unwrap_or(s)
-            .to_ascii_lowercase();
-        match primary.as_str() {
-            "en" => Some(Self::En),
-            "zh" | "cn" => Some(Self::Zh),
-            _ => None,
-        }
-    }
-
-    pub fn from_env() -> Option<Self> {
-        env::var("KIMINI_LANG")
-            .ok()
-            .as_deref()
-            .and_then(Self::parse_tag)
-    }
-
-    pub fn from_system() -> Self {
-        for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
-            if let Ok(v) = env::var(key)
-                && let Some(lang) = Self::parse_tag(&v)
-            {
-                return lang;
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        if let Some(lang) = apple_locale() {
-            return lang;
-        }
-
-        Self::En
-    }
-
-    /// Resolve active language: env → preference → system → English.
-    pub fn resolve() -> Self {
-        if let Some(lang) = Self::from_env() {
-            return lang;
-        }
-        if let Some(lang) = load_preference() {
-            return lang;
-        }
-        Self::from_system()
-    }
-
     pub fn strings(self) -> Strings {
         match self {
             Self::En => Strings::en(),
@@ -121,6 +63,8 @@ pub struct NativeStrings {
     pub sessions_list: &'static str,
     pub new_session: &'static str,
     pub search_sessions: &'static str,
+    pub search_no_results: &'static str,
+    pub search_navigation_hint: &'static str,
     pub load_more_sessions: &'static str,
     pub show_more_conversations: &'static str,
     pub show_less_conversations: &'static str,
@@ -131,6 +75,8 @@ pub struct NativeStrings {
     pub restore_session: &'static str,
     pub no_archived_sessions: &'static str,
     pub choose_folder: &'static str,
+    pub more_workspaces: &'static str,
+    pub new_workspace: &'static str,
     pub start_session: &'static str,
     pub start_session_hint: &'static str,
     pub load_earlier: &'static str,
@@ -166,6 +112,22 @@ pub struct NativeStrings {
     pub thinking_preview_hint: &'static str,
     pub close_thinking: &'static str,
     pub permission: &'static str,
+    pub permission_manual: &'static str,
+    pub permission_auto: &'static str,
+    pub permission_yolo: &'static str,
+    pub permission_manual_desc: &'static str,
+    pub permission_auto_desc: &'static str,
+    pub permission_yolo_desc: &'static str,
+    pub modes: &'static str,
+    pub mode_plan: &'static str,
+    pub mode_plan_desc: &'static str,
+    pub mode_swarm: &'static str,
+    pub mode_swarm_desc: &'static str,
+    pub mode_goal: &'static str,
+    pub mode_goal_desc: &'static str,
+    pub mode_off: &'static str,
+    pub more_models: &'static str,
+    pub session_just_now: &'static str,
     pub plan_on: &'static str,
     pub plan_off: &'static str,
     pub swarm_on: &'static str,
@@ -229,6 +191,46 @@ pub struct NativeStrings {
     pub cancel: &'static str,
     pub browser: &'static str,
     pub close_browser: &'static str,
+    pub collapse_sidebar: &'static str,
+    pub expand_sidebar: &'static str,
+    pub settings_general: &'static str,
+    pub settings_agent: &'static str,
+    pub settings_account: &'static str,
+    pub settings_advanced: &'static str,
+    pub settings_appearance: &'static str,
+    pub settings_color_scheme: &'static str,
+    pub settings_moon_bright: &'static str,
+    pub settings_moon_dark: &'static str,
+    pub settings_system: &'static str,
+    pub settings_accent: &'static str,
+    pub settings_blue: &'static str,
+    pub settings_black: &'static str,
+    pub settings_font_size: &'static str,
+    pub settings_language: &'static str,
+    pub settings_show_outline: &'static str,
+    pub settings_show_outline_desc: &'static str,
+    pub settings_agent_defaults: &'static str,
+    pub settings_config_unavailable: &'static str,
+    pub settings_default_model: &'static str,
+    pub settings_default_model_desc: &'static str,
+    pub settings_default_permission: &'static str,
+    pub settings_default_permission_desc: &'static str,
+    pub settings_default_thinking: &'static str,
+    pub settings_default_thinking_desc: &'static str,
+    pub settings_default_plan: &'static str,
+    pub settings_default_plan_desc: &'static str,
+    pub settings_merge_skills: &'static str,
+    pub settings_merge_skills_desc: &'static str,
+    pub settings_backend: &'static str,
+    pub settings_server_version: &'static str,
+    pub settings_telemetry: &'static str,
+    pub settings_telemetry_desc: &'static str,
+    pub settings_preferences_onboarding: &'static str,
+    pub settings_archived_desc: &'static str,
+    pub settings_current_session: &'static str,
+    pub settings_daemon: &'static str,
+    pub settings_version: &'static str,
+    pub settings_open_archived: &'static str,
     pub connected: &'static str,
     pub connecting: &'static str,
     pub working: &'static str,
@@ -299,6 +301,7 @@ pub struct NativeStrings {
     pub skill_activation_unacknowledged: &'static str,
     pub skill_attachments_unsupported: &'static str,
     pub command_attachments_unsupported: &'static str,
+    pub command_requires_session: &'static str,
     pub built_in_command: &'static str,
     pub slash_commands: &'static str,
     pub auth_panel: &'static str,
@@ -329,8 +332,10 @@ impl Strings {
             native: NativeStrings {
                 sessions: "Sessions",
                 sessions_list: "Kimi Code sessions",
-                new_session: "+ New",
+                new_session: "New Chat",
                 search_sessions: "Search sessions",
+                search_no_results: "No conversations found",
+                search_navigation_hint: "↑ ↓ to navigate · ↵ to open · Esc to close",
                 load_more_sessions: "Load more sessions",
                 show_more_conversations: "Show {count} more conversations",
                 show_less_conversations: "Show fewer conversations",
@@ -341,8 +346,10 @@ impl Strings {
                 restore_session: "Restore",
                 no_archived_sessions: "No archived sessions",
                 choose_folder: "Create Kimi session in this folder",
-                start_session: "Start a Kimi Code session",
-                start_session_hint: "Select a session or send a prompt to begin.",
+                more_workspaces: "More workspaces",
+                new_workspace: "New workspace",
+                start_session: "Kimi Code",
+                start_session_hint: "No messages yet — type below to start the conversation",
                 load_earlier: "Load earlier messages",
                 loading_earlier: "Loading earlier messages…",
                 ask_placeholder: "Ask Kimi to work on this project…",
@@ -376,6 +383,22 @@ impl Strings {
                 thinking_preview_hint: "Select a thinking trace to inspect it here.",
                 close_thinking: "Close thinking preview",
                 permission: "Permission",
+                permission_manual: "Manual",
+                permission_auto: "Auto",
+                permission_yolo: "YOLO",
+                permission_manual_desc: "Ask for approval on every tool action",
+                permission_auto_desc: "Fully autonomous — agent decides everything without asking",
+                permission_yolo_desc: "Auto-approve tool actions, but agent may still ask questions",
+                modes: "Mode",
+                mode_plan: "Plan",
+                mode_plan_desc: "Have the agent make a plan before changing files",
+                mode_swarm: "Swarm",
+                mode_swarm_desc: "Run parallel agents for broader exploration",
+                mode_goal: "Goal",
+                mode_goal_desc: "Track one objective until it is complete",
+                mode_off: "Off",
+                more_models: "More models…",
+                session_just_now: "now",
                 plan_on: "Plan · On",
                 plan_off: "Plan · Off",
                 swarm_on: "Swarm · On",
@@ -439,6 +462,46 @@ impl Strings {
                 cancel: "Cancel",
                 browser: "Browser",
                 close_browser: "Close Browser",
+                collapse_sidebar: "Collapse sidebar",
+                expand_sidebar: "Expand sidebar",
+                settings_general: "General",
+                settings_agent: "Agent",
+                settings_account: "Account",
+                settings_advanced: "Advanced",
+                settings_appearance: "Appearance",
+                settings_color_scheme: "Light/Dark",
+                settings_moon_bright: "Moon Bright",
+                settings_moon_dark: "Moon Dark",
+                settings_system: "System",
+                settings_accent: "Accent",
+                settings_blue: "Blue",
+                settings_black: "Black",
+                settings_font_size: "Font size",
+                settings_language: "Language",
+                settings_show_outline: "Show conversation outline",
+                settings_show_outline_desc: "Show a clickable outline in the right margin to jump between messages",
+                settings_agent_defaults: "Agent defaults",
+                settings_config_unavailable: "Daemon settings are unavailable",
+                settings_default_model: "Default model",
+                settings_default_model_desc: "New sessions prefer this model",
+                settings_default_permission: "Default permission",
+                settings_default_permission_desc: "Only affects newly-created sessions",
+                settings_default_thinking: "Thinking by default",
+                settings_default_thinking_desc: "Whether new sessions start with thinking enabled",
+                settings_default_plan: "Plan mode by default",
+                settings_default_plan_desc: "Whether new sessions start in plan mode",
+                settings_merge_skills: "Merge all available skills",
+                settings_merge_skills_desc: "Show project, plugin, and user skills together",
+                settings_backend: "Backend",
+                settings_server_version: "Server version",
+                settings_telemetry: "Improve product with usage data",
+                settings_telemetry_desc: "When on, anonymous interaction data helps improve the product. Takes effect after restarting the service.",
+                settings_preferences_onboarding: "Preferences / onboarding",
+                settings_archived_desc: "Browse archived sessions, see their workspace path, name, and archive time, and restore them to the session list.",
+                settings_current_session: "Current session",
+                settings_daemon: "Daemon",
+                settings_version: "Version",
+                settings_open_archived: "Show archived sessions",
                 connected: "Connected",
                 connecting: "Connecting to Kimi Code…",
                 working: "Working",
@@ -496,7 +559,7 @@ impl Strings {
                 diff: "Diff",
                 binary_file: "Binary file",
                 skills_panel: "Session skills",
-                workspace_tools: "Workspace",
+                workspace_tools: "Workspaces",
                 skills: "Skills",
                 close_skills: "Close",
                 refresh_skills: "Refresh",
@@ -509,6 +572,7 @@ impl Strings {
                 skill_activation_unacknowledged: "Skill activation was not acknowledged",
                 skill_attachments_unsupported: "Remove attachments before activating a skill",
                 command_attachments_unsupported: "Remove attachments before running a command",
+                command_requires_session: "This command requires an active session",
                 built_in_command: "Built-in command",
                 slash_commands: "Commands and skills",
                 auth_panel: "Kimi authentication",
@@ -561,8 +625,10 @@ impl Strings {
             native: NativeStrings {
                 sessions: "会话",
                 sessions_list: "Kimi Code 会话列表",
-                new_session: "+ 新建",
+                new_session: "新建对话",
                 search_sessions: "搜索会话",
+                search_no_results: "没有匹配的会话",
+                search_navigation_hint: "↑ ↓ 选择 · ↵ 打开 · Esc 关闭",
                 load_more_sessions: "加载更多会话",
                 show_more_conversations: "显示另外 {count} 个对话",
                 show_less_conversations: "收起较早对话",
@@ -573,8 +639,10 @@ impl Strings {
                 restore_session: "恢复",
                 no_archived_sessions: "没有已归档会话",
                 choose_folder: "在此文件夹中创建 Kimi 会话",
-                start_session: "开始一个 Kimi Code 会话",
-                start_session_hint: "选择会话，或发送消息开始工作。",
+                more_workspaces: "更多工作区",
+                new_workspace: "新建工作区",
+                start_session: "Kimi Code",
+                start_session_hint: "还没有消息——在下方输入以开始对话",
                 load_earlier: "加载更早消息",
                 loading_earlier: "正在加载更早消息…",
                 ask_placeholder: "让 Kimi 在这个项目中工作…",
@@ -608,6 +676,22 @@ impl Strings {
                 thinking_preview_hint: "选择一段思考轨迹后在此查看。",
                 close_thinking: "关闭思考预览",
                 permission: "权限",
+                permission_manual: "手动",
+                permission_auto: "自动",
+                permission_yolo: "YOLO",
+                permission_manual_desc: "每个工具操作都需要你手动确认",
+                permission_auto_desc: "完全自主运行，智能体自己做决定，不再询问",
+                permission_yolo_desc: "自动批准工具操作，但遇到关键问题仍会询问",
+                modes: "模式",
+                mode_plan: "计划",
+                mode_plan_desc: "先让智能体梳理计划，再修改文件",
+                mode_swarm: "Swarm",
+                mode_swarm_desc: "并行运行多个智能体，适合大范围探索",
+                mode_goal: "目标",
+                mode_goal_desc: "持续跟踪一个目标，直到任务完成",
+                mode_off: "未启用",
+                more_models: "更多模型…",
+                session_just_now: "刚刚",
                 plan_on: "计划 · 开",
                 plan_off: "计划 · 关",
                 swarm_on: "集群 · 开",
@@ -671,6 +755,46 @@ impl Strings {
                 cancel: "取消",
                 browser: "浏览器",
                 close_browser: "关闭浏览器",
+                collapse_sidebar: "收起侧栏",
+                expand_sidebar: "展开侧栏",
+                settings_general: "常规",
+                settings_agent: "智能体",
+                settings_account: "账户",
+                settings_advanced: "高级",
+                settings_appearance: "外观",
+                settings_color_scheme: "明暗模式",
+                settings_moon_bright: "月白",
+                settings_moon_dark: "月暗",
+                settings_system: "跟随系统",
+                settings_accent: "强调色",
+                settings_blue: "蓝色",
+                settings_black: "黑色",
+                settings_font_size: "字体大小",
+                settings_language: "语言",
+                settings_show_outline: "显示会话大纲",
+                settings_show_outline_desc: "在右侧显示可点击的大纲，以便在消息之间跳转",
+                settings_agent_defaults: "Agent 默认值",
+                settings_config_unavailable: "服务端设置暂不可用",
+                settings_default_model: "默认模型",
+                settings_default_model_desc: "新会话会优先使用这个模型",
+                settings_default_permission: "默认权限",
+                settings_default_permission_desc: "只影响之后新建的会话",
+                settings_default_thinking: "默认开启思考",
+                settings_default_thinking_desc: "新会话默认是否开启 thinking",
+                settings_default_plan: "默认计划模式",
+                settings_default_plan_desc: "新会话默认进入 plan mode",
+                settings_merge_skills: "合并所有可用 Skills",
+                settings_merge_skills_desc: "让项目、插件和用户 Skills 一起出现在可用列表中",
+                settings_backend: "后端",
+                settings_server_version: "服务端版本",
+                settings_telemetry: "使用数据改进产品",
+                settings_telemetry_desc: "开启后会收集匿名交互数据用于改进产品，更改后需重启服务生效。",
+                settings_preferences_onboarding: "偏好设置 / 引导",
+                settings_archived_desc: "浏览归档会话及其工作区、名称和归档时间，并将它们恢复到会话列表。",
+                settings_current_session: "当前会话",
+                settings_daemon: "服务端",
+                settings_version: "版本",
+                settings_open_archived: "显示归档会话",
                 connected: "已连接",
                 connecting: "正在连接 Kimi Code…",
                 working: "工作中",
@@ -741,6 +865,7 @@ impl Strings {
                 skill_activation_unacknowledged: "服务端未确认技能激活",
                 skill_attachments_unsupported: "激活技能前请先移除附件",
                 command_attachments_unsupported: "执行命令前请先移除附件",
+                command_requires_session: "此命令需要一个已创建的会话",
                 built_in_command: "内置命令",
                 slash_commands: "命令与技能",
                 auth_panel: "Kimi 认证",
@@ -786,89 +911,5 @@ impl Strings {
             launch_manual_hint: "粘贴 `kimi web` 输出的地址。",
             launch_connect: "连接",
         }
-    }
-}
-
-fn config_dir() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = env::var_os("HOME")?;
-        Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("Kimini"),
-        )
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Some(xdg) = env::var_os("XDG_CONFIG_HOME") {
-            return Some(PathBuf::from(xdg).join("kimini"));
-        }
-        let home = env::var_os("HOME")?;
-        Some(PathBuf::from(home).join(".config").join("kimini"))
-    }
-}
-
-fn preference_path() -> Option<PathBuf> {
-    Some(config_dir()?.join("lang"))
-}
-
-pub fn load_preference() -> Option<Lang> {
-    let path = preference_path()?;
-    let raw = fs::read_to_string(path).ok()?;
-    Lang::parse_tag(raw.trim())
-}
-
-pub fn save_preference(lang: Lang) -> std::io::Result<()> {
-    let dir = config_dir()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no config directory"))?;
-    fs::create_dir_all(&dir)?;
-    fs::write(dir.join("lang"), lang.code())
-}
-
-#[cfg(target_os = "macos")]
-fn apple_locale() -> Option<Lang> {
-    let output = std::process::Command::new("defaults")
-        .args(["read", "-g", "AppleLocale"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&output.stdout);
-    Lang::parse_tag(s.trim())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_english_tags() {
-        assert_eq!(Lang::parse_tag("en"), Some(Lang::En));
-        assert_eq!(Lang::parse_tag("en_US"), Some(Lang::En));
-        assert_eq!(Lang::parse_tag("en-US.UTF-8"), Some(Lang::En));
-    }
-
-    #[test]
-    fn parse_chinese_tags() {
-        assert_eq!(Lang::parse_tag("zh"), Some(Lang::Zh));
-        assert_eq!(Lang::parse_tag("zh_CN"), Some(Lang::Zh));
-        assert_eq!(Lang::parse_tag("zh-Hans"), Some(Lang::Zh));
-    }
-
-    #[test]
-    fn parse_unknown_is_none() {
-        assert_eq!(Lang::parse_tag(""), None);
-        assert_eq!(Lang::parse_tag("ja"), None);
-    }
-
-    #[test]
-    fn zh_table_has_cjk_en_table_does_not() {
-        let en = Strings::en().reload;
-        let zh = Strings::zh().reload;
-        assert!(en.is_ascii());
-        assert!(!zh.is_ascii());
     }
 }

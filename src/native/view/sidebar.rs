@@ -1,11 +1,9 @@
-use gpui::{Context, IntoElement, Role, div, list, prelude::*, px, rgb};
-use gpui_component::{
-    Icon, IconName, Sizable as _, StyledExt, input::Input, scroll::ScrollableElement,
-};
+use gpui::{Context, IntoElement, Role, div, img, list, prelude::*, px};
+use gpui_component::{Icon, IconName, Sizable as _, StyledExt, scroll::ScrollableElement};
 
 use super::super::app::Shell;
+use super::super::shell::APP_ICON_PATH;
 use super::super::theme::*;
-use super::accessible_input::accessible_input;
 
 impl Shell {
     pub(super) fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -15,15 +13,14 @@ impl Shell {
         } else {
             self.model.sessions()
         };
-        let active = (!archived)
+        let active = (!archived && self.new_session_draft.is_none())
             .then(|| {
                 self.model
                     .active_session()
                     .map(|session| session.id.clone())
             })
             .flatten();
-        let query = self.session_search.read(cx).value().trim().to_lowercase();
-        self.session_list.sync(sessions, &query, active.as_deref());
+        self.session_list.sync(sessions, "", active.as_deref());
         let visible_count = self.session_list.session_count();
         let list_empty = self.session_list.is_empty();
         let list_state = self.session_list.list.clone();
@@ -46,9 +43,9 @@ impl Shell {
             .flex()
             .flex_col()
             .border_r_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SIDEBAR))
-            .child(self.sidebar_brand())
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SIDEBAR))
+            .child(self.sidebar_brand(cx))
             .child(self.sidebar_primary_actions(cx))
             .child(self.sidebar_section_header(archived, cx))
             .child(
@@ -58,14 +55,14 @@ impl Shell {
                     .aria_label(self.strings.native.sessions_list)
                     .flex_1()
                     .min_h_0()
-                    .px_2()
+                    .px_3()
                     .when(list_empty, |container| {
                         container.child(
                             div()
                                 .px_2()
                                 .py_3()
-                                .text_xs()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(if archived && self.model.archived_sessions_loaded() {
                                     self.strings.native.no_archived_sessions
                                 } else if loading {
@@ -104,35 +101,58 @@ impl Shell {
             .child(self.sidebar_footer(cx))
     }
 
-    fn sidebar_brand(&self) -> impl IntoElement {
+    fn sidebar_brand(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .h(px(HEADER_HEIGHT))
             .flex_none()
             .flex()
             .items_center()
+            .justify_between()
             .gap_2()
-            .px_3()
+            .px(px(20.0))
             .child(
                 div()
-                    .size(px(22.0))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(img(APP_ICON_PATH).size(px(24.0)).rounded_md())
+                    .child(
+                        div()
+                            .text_size(font_px(13.0))
+                            .font_semibold()
+                            .child("Kimini"),
+                    ),
+            )
+            .child(
+                div()
+                    .id("collapse-sidebar")
+                    .focusable()
+                    .tab_stop(true)
+                    .role(Role::Button)
+                    .aria_label(self.strings.native.collapse_sidebar)
+                    .cursor_pointer()
+                    .size(px(28.0))
                     .flex()
                     .items_center()
                     .justify_center()
                     .rounded_md()
-                    .bg(rgb(ACCENT))
-                    .text_color(rgb(SURFACE))
-                    .text_xs()
-                    .font_semibold()
-                    .child("K"),
+                    .text_color(theme_rgb(TEXT_MUTED))
+                    .hover(|item| {
+                        item.bg(theme_rgb(SURFACE_ACTIVE))
+                            .text_color(theme_rgb(TEXT))
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.sidebar_collapsed = true;
+                        cx.notify();
+                    }))
+                    .child(Icon::new(IconName::PanelLeft).xsmall()),
             )
-            .child(div().text_sm().font_semibold().child("Kimi Code"))
     }
 
     fn sidebar_primary_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .px_2()
-            .pt_1()
-            .pb_3()
+            .px_3()
+            .pb_2()
             .flex()
             .flex_col()
             .gap_1()
@@ -141,24 +161,25 @@ impl Shell {
                     .child(
                         Icon::new(IconName::Plus)
                             .xsmall()
-                            .text_color(rgb(TEXT_SECONDARY)),
+                            .text_color(theme_rgb(TEXT_SECONDARY)),
                     )
-                    .child(div().child(self.strings.native.new_session.trim_start_matches("+ ")))
-                    .on_click(cx.listener(|this, _, _, cx| this.choose_session_workspace(cx))),
+                    .child(div().child(self.strings.native.new_session))
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.begin_new_session(window, cx)),
+                    ),
             )
             .child(
-                div().px_1().child(
-                    accessible_input(
-                        "session-search-input",
-                        &self.session_search,
-                        Role::SearchInput,
-                        self.strings.native.search_sessions,
-                        self.strings.native.search_sessions,
-                        Input::new(&self.session_search),
-                        cx,
+                sidebar_action("session-search", self.strings.native.search_sessions)
+                    .child(
+                        Icon::new(IconName::Search)
+                            .xsmall()
+                            .text_color(theme_rgb(TEXT_SECONDARY)),
                     )
-                    .h(px(32.0)),
-                ),
+                    .child(div().flex_1().child(self.strings.native.search_sessions))
+                    .child(search_shortcut_hint())
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.open_session_search(window, cx)),
+                    ),
             )
     }
 
@@ -174,20 +195,20 @@ impl Shell {
             self.strings.native.archived_sessions
         };
         div()
-            .h(px(28.0))
+            .h(px(32.0))
             .flex_none()
             .flex()
             .items_center()
             .justify_between()
-            .px_3()
-            .text_color(rgb(TEXT_MUTED))
+            .px(px(20.0))
+            .text_color(theme_rgb(TEXT_MUTED))
             .child(
                 div()
                     .id("sessions-heading")
                     .role(Role::Heading)
                     .aria_level(2)
                     .aria_label(heading)
-                    .text_size(px(10.0))
+                    .text_size(font_px(10.0))
                     .font_semibold()
                     .child(heading.to_uppercase()),
             )
@@ -201,8 +222,9 @@ impl Shell {
         div()
             .flex_none()
             .border_t_1()
-            .border_color(rgb(BORDER))
-            .p_2()
+            .border_color(theme_rgb(BORDER))
+            .px_3()
+            .py_2()
             .flex()
             .items_center()
             .gap_1()
@@ -212,7 +234,7 @@ impl Shell {
                     .child(
                         Icon::new(IconName::Settings)
                             .xsmall()
-                            .text_color(rgb(TEXT_SECONDARY)),
+                            .text_color(theme_rgb(TEXT_SECONDARY)),
                     )
                     .child(self.strings.settings.trim_end_matches('…'))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_auth_panel(cx))),
@@ -263,9 +285,35 @@ fn sidebar_action(id: &'static str, label: &'static str) -> gpui::Stateful<gpui:
         .items_center()
         .gap_2()
         .rounded_md()
-        .text_sm()
-        .text_color(rgb(TEXT_SECONDARY))
-        .hover(|item| item.bg(rgb(SURFACE_ACTIVE)).text_color(rgb(TEXT)))
+        .text_size(font_px(13.0))
+        .text_color(theme_rgb(TEXT_SECONDARY))
+        .hover(|item| {
+            item.bg(theme_rgb(SURFACE_ACTIVE))
+                .text_color(theme_rgb(TEXT))
+        })
+}
+
+fn search_shortcut_hint() -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .children(["⌘", "K"].map(|key| {
+            div()
+                .min_w(px(16.0))
+                .h(px(18.0))
+                .px_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_sm()
+                .border_1()
+                .border_color(theme_rgb(BORDER))
+                .bg(theme_rgb(SURFACE_SUBTLE))
+                .text_size(font_px(10.0))
+                .text_color(theme_rgb(TEXT_MUTED))
+                .child(key)
+        }))
 }
 
 fn sidebar_text_button(label: &'static str, id: &'static str) -> gpui::Stateful<gpui::Div> {
@@ -279,7 +327,10 @@ fn sidebar_text_button(label: &'static str, id: &'static str) -> gpui::Stateful<
         .rounded_md()
         .px_2()
         .py_1()
-        .text_size(px(10.0))
-        .text_color(rgb(TEXT_MUTED))
-        .hover(|item| item.bg(rgb(SURFACE_ACTIVE)).text_color(rgb(TEXT_SECONDARY)))
+        .text_size(font_px(10.0))
+        .text_color(theme_rgb(TEXT_MUTED))
+        .hover(|item| {
+            item.bg(theme_rgb(SURFACE_ACTIVE))
+                .text_color(theme_rgb(TEXT_SECONDARY))
+        })
 }

@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, input::Input};
 
 use crate::protocol::QuestionRequest;
@@ -64,8 +64,8 @@ fn render_request(
                         .cursor_pointer()
                         .rounded_md()
                         .border_1()
-                        .border_color(rgb(if selected { ACCENT } else { BORDER }))
-                        .bg(rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
+                        .border_color(theme_rgb(if selected { ACCENT } else { BORDER }))
+                        .bg(theme_rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
                         .px_3()
                         .py_2()
                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -82,15 +82,15 @@ fn render_request(
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .text_sm()
+                                .text_size(font_px(13.0))
                                 .font_semibold()
                                 .child(if selected { "✓" } else { "○" })
                                 .child(option.label.clone())
                                 .when(option.recommended, |label| {
                                     label.child(
                                         div()
-                                            .text_xs()
-                                            .text_color(rgb(TEXT_MUTED))
+                                            .text_size(font_px(12.0))
+                                            .text_color(theme_rgb(TEXT_MUTED))
                                             .child(shell.strings.native.recommended),
                                     )
                                 }),
@@ -98,8 +98,8 @@ fn render_request(
                         .children(option.description.clone().map(|description| {
                             div()
                                 .mt_1()
-                                .text_xs()
-                                .text_color(rgb(TEXT_MUTED))
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
                                 .child(description)
                         }))
                 })
@@ -125,14 +125,14 @@ fn render_request(
                     .aria_label(label.clone())
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(if selected { ACCENT } else { BORDER }))
-                    .bg(rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
+                    .border_color(theme_rgb(if selected { ACCENT } else { BORDER }))
+                    .bg(theme_rgb(if selected { SURFACE_ACTIVE } else { SURFACE }))
                     .px_3()
                     .py_2()
                     .child(
                         div()
                             .mb_2()
-                            .text_sm()
+                            .text_size(font_px(13.0))
                             .font_semibold()
                             .child(if selected { "✓" } else { "○" })
                             .child(format!(" {label}")),
@@ -140,8 +140,8 @@ fn render_request(
                     .children(item.other_description.clone().map(|description| {
                         div()
                             .mb_2()
-                            .text_xs()
-                            .text_color(rgb(TEXT_MUTED))
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
                             .child(description)
                     }))
                     .children(input.map(|input| {
@@ -162,16 +162,21 @@ fn render_request(
                 .children(item.header.clone().map(|header| {
                     div()
                         .mb_1()
-                        .text_xs()
-                        .text_color(rgb(TEXT_MUTED))
+                        .text_size(font_px(12.0))
+                        .text_color(theme_rgb(TEXT_MUTED))
                         .child(header)
                 }))
-                .child(div().text_sm().font_semibold().child(item.question.clone()))
+                .child(
+                    div()
+                        .text_size(font_px(13.0))
+                        .font_semibold()
+                        .child(item.question.clone()),
+                )
                 .children(item.body.clone().map(|body| {
                     div()
                         .mt_1()
-                        .text_sm()
-                        .text_color(rgb(TEXT_MUTED))
+                        .text_size(font_px(13.0))
+                        .text_color(theme_rgb(TEXT_MUTED))
                         .child(body)
                 }))
                 .child(
@@ -193,8 +198,8 @@ fn render_request(
         .mb_2()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(BORDER))
-        .bg(rgb(SURFACE))
+        .border_color(theme_rgb(BORDER))
+        .bg(theme_rgb(SURFACE))
         .p_3()
         .children(items)
         .child(
@@ -218,14 +223,14 @@ fn render_request(
                     )
                     .when(can_submit, |button| {
                         button
-                            .bg(rgb(ACCENT))
-                            .text_color(rgb(SURFACE))
+                            .bg(theme_rgb(ACCENT))
+                            .text_color(theme_rgb(SURFACE))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.submit_question(question_id.clone(), cx)
                             }))
                     })
                     .when(!can_submit, |button| {
-                        button.cursor_default().text_color(rgb(TEXT_MUTED))
+                        button.cursor_default().text_color(theme_rgb(TEXT_MUTED))
                     }),
                 ),
         )

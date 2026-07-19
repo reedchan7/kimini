@@ -1,4 +1,4 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*, px, relative, rgb};
+use gpui::{AnyElement, Context, Role, div, prelude::*, px, relative};
 use gpui_component::StyledExt;
 
 use crate::native::app::Shell;
@@ -43,7 +43,7 @@ impl Shell {
             .child(
                 div()
                     .font_semibold()
-                    .text_color(rgb(status_color))
+                    .text_color(theme_rgb(status_color))
                     .child(self.strings.native.goal_label),
             )
             .child(
@@ -56,11 +56,11 @@ impl Shell {
             .child(
                 div()
                     .rounded_full()
-                    .bg(rgb(SURFACE_ACTIVE))
+                    .bg(theme_rgb(SURFACE_ACTIVE))
                     .px_2()
                     .py_0p5()
-                    .text_xs()
-                    .text_color(rgb(status_color))
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(status_color))
                     .child(status_label.to_owned()),
             )
             .children(goal.token_percent().map(|percent| {
@@ -68,12 +68,12 @@ impl Shell {
                     .w(px(56.))
                     .h(px(4.))
                     .rounded_full()
-                    .bg(rgb(BORDER))
+                    .bg(theme_rgb(BORDER))
                     .child(
                         div()
                             .h_full()
                             .rounded_full()
-                            .bg(rgb(status_color))
+                            .bg(theme_rgb(status_color))
                             .w(relative(f32::from(percent) / 100.)),
                     )
             }))
@@ -87,8 +87,8 @@ impl Shell {
             .max_w(px(CONTENT_WIDTH - 32.))
             .rounded_lg()
             .border_1()
-            .border_color(rgb(BORDER))
-            .bg(rgb(SURFACE))
+            .border_color(theme_rgb(BORDER))
+            .bg(theme_rgb(SURFACE))
             .child(header)
             .when(expanded, |card| card.child(self.expanded_goal(&goal, cx)));
 
@@ -109,38 +109,44 @@ impl Shell {
         let can_resume = goal.can_resume();
         div()
             .border_t_1()
-            .border_color(rgb(BORDER))
+            .border_color(theme_rgb(BORDER))
             .px_3()
             .py_3()
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().text_sm().child(goal.objective.clone()))
+            .child(div().text_size(font_px(13.0)).child(goal.objective.clone()))
             .children(goal.completion_criterion.as_ref().map(|criterion| {
                 div()
-                    .text_xs()
-                    .text_color(rgb(TEXT_MUTED))
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(TEXT_MUTED))
                     .child(format!("{} · {criterion}", self.strings.native.done_when))
             }))
-            .children(
-                goal.terminal_reason
-                    .as_ref()
-                    .map(|reason| div().text_xs().text_color(rgb(ERROR)).child(reason.clone())),
-            )
+            .children(goal.terminal_reason.as_ref().map(|reason| {
+                div()
+                    .text_size(font_px(12.0))
+                    .text_color(theme_rgb(ERROR))
+                    .child(reason.clone())
+            }))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap_3()
-                    .child(div().text_xs().text_color(rgb(TEXT_MUTED)).child(format!(
-                        "{} {} · {} {} · {}",
-                        goal.turns_used,
-                        self.strings.native.turns,
-                        format_count(goal.tokens_used),
-                        self.strings.native.tokens,
-                        format_duration(goal.wall_clock_ms),
-                    )))
+                    .child(
+                        div()
+                            .text_size(font_px(12.0))
+                            .text_color(theme_rgb(TEXT_MUTED))
+                            .child(format!(
+                                "{} {} · {} {} · {}",
+                                goal.turns_used,
+                                self.strings.native.turns,
+                                format_count(goal.tokens_used),
+                                self.strings.native.tokens,
+                                format_duration(goal.wall_clock_ms),
+                            )),
+                    )
                     .child(
                         div()
                             .flex()
@@ -184,11 +190,11 @@ fn goal_action(id: &'static str, label: &'static str) -> gpui::Stateful<gpui::Di
         .cursor_pointer()
         .rounded_md()
         .border_1()
-        .border_color(rgb(BORDER))
+        .border_color(theme_rgb(BORDER))
         .px_2()
         .py_1()
-        .text_xs()
-        .hover(|button| button.bg(rgb(SURFACE_ACTIVE)))
+        .text_size(font_px(12.0))
+        .hover(|button| button.bg(theme_rgb(SURFACE_ACTIVE)))
         .child(label)
 }
 
