@@ -46,7 +46,7 @@ impl Shell {
                     .when(self.sidebar_collapsed, |title| {
                         title.child(self.sidebar_restore_button(cx))
                     })
-                    .children(session.map(|item| self.session_title(item, cx)))
+                    .children(session.map(|item| self.session_title(item)))
                     .when(session.is_some(), |title| {
                         title.child(self.session_actions())
                     })

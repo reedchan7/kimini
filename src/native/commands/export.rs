@@ -6,7 +6,18 @@ use super::super::app::{LoadState, Shell};
 
 impl Shell {
     pub(in crate::native) fn export_active_session(&mut self, cx: &mut Context<Self>) {
-        let Some((client, session_id)) = self.active_request_context() else {
+        let Some(session_id) = self
+            .model
+            .active_session()
+            .map(|session| session.id.clone())
+        else {
+            return;
+        };
+        self.export_session(session_id, cx);
+    }
+
+    pub(in crate::native) fn export_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
             return;
         };
         let destination = default_export_directory();

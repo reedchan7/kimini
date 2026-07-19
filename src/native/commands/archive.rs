@@ -9,9 +9,22 @@ impl Shell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.model.active_session().is_none() {
+        let Some(session_id) = self
+            .model
+            .active_session()
+            .map(|session| session.id.clone())
+        else {
             return;
-        }
+        };
+        self.confirm_archive_session(session_id, window, cx);
+    }
+
+    pub(in crate::native) fn confirm_archive_session(
+        &mut self,
+        session_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let answer = window.prompt(
             PromptLevel::Warning,
             self.strings.native.archive_question,
@@ -23,13 +36,13 @@ impl Shell {
             if answer.await != Ok(0) {
                 return;
             }
-            let _ = this.update(cx, |this, cx| this.archive_active_session(cx));
+            let _ = this.update(cx, |this, cx| this.archive_session(session_id.clone(), cx));
         })
         .detach();
     }
 
-    fn archive_active_session(&mut self, cx: &mut Context<Self>) {
-        let Some((client, session_id)) = self.active_request_context() else {
+    fn archive_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
             return;
         };
         self.state = LoadState::Working(self.strings.native.working.into());

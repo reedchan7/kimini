@@ -19,6 +19,10 @@ const WINDOW_WIDTH: f32 = 1440.0;
 const WINDOW_HEIGHT: f32 = 900.0;
 pub(super) const APP_ICON_PATH: &str = "images/kimini-app-icon.png";
 pub(super) const ATTACHMENT_ICON_PATH: &str = "icons/kimini-paperclip.svg";
+pub(super) const SESSION_RENAME_ICON_PATH: &str = "icons/kimini-pencil.svg";
+pub(super) const SESSION_FORK_ICON_PATH: &str = "icons/kimini-git-fork.svg";
+pub(super) const SESSION_EXPORT_ICON_PATH: &str = "icons/kimini-download.svg";
+pub(super) const SESSION_ARCHIVE_ICON_PATH: &str = "icons/kimini-archive.svg";
 #[cfg(target_os = "macos")]
 pub(super) const PRIMARY_MODIFIER_LABEL: &str = "⌘";
 #[cfg(not(target_os = "macos"))]
@@ -38,6 +42,26 @@ impl AssetSource for KiminiAssets {
                 "../../assets/icons/paperclip.svg"
             ))));
         }
+        if path == SESSION_RENAME_ICON_PATH {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../../assets/icons/pencil.svg"
+            ))));
+        }
+        if path == SESSION_FORK_ICON_PATH {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../../assets/icons/git-fork.svg"
+            ))));
+        }
+        if path == SESSION_EXPORT_ICON_PATH {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../../assets/icons/download.svg"
+            ))));
+        }
+        if path == SESSION_ARCHIVE_ICON_PATH {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../../assets/icons/archive.svg"
+            ))));
+        }
         gpui_component_assets::Assets.load(path)
     }
 
@@ -48,6 +72,16 @@ impl AssetSource for KiminiAssets {
         }
         if ATTACHMENT_ICON_PATH.starts_with(path) {
             assets.push(ATTACHMENT_ICON_PATH.into());
+        }
+        for icon in [
+            SESSION_RENAME_ICON_PATH,
+            SESSION_FORK_ICON_PATH,
+            SESSION_EXPORT_ICON_PATH,
+            SESSION_ARCHIVE_ICON_PATH,
+        ] {
+            if icon.starts_with(path) {
+                assets.push(icon.into());
+            }
         }
         Ok(assets)
     }

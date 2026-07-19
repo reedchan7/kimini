@@ -38,6 +38,7 @@ impl Shell {
                         self.config_error = Some(error);
                     }
                 }
+                self.model.replace_workspaces(bootstrap.workspaces);
                 self.model.replace_session_page(bootstrap.sessions);
                 self.models = bootstrap.models;
                 if let Some(active) = bootstrap.active {
@@ -197,7 +198,7 @@ impl Shell {
         self.composer_menu = None;
         self.draft_workspace_menu_open = false;
         self.draft_workspace_show_all = false;
-        self.renaming_session = false;
+        self.renaming_session_id = None;
         self.load_snapshot(session_id, cx);
         self.composer
             .update(cx, |input, cx| input.focus(window, cx));

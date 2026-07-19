@@ -1,4 +1,4 @@
-use gpui::{Context, PathPromptOptions, Window};
+use gpui::{AppContext as _, Context, PathPromptOptions, Window};
 
 use crate::native::app::{NewSessionDraft, Shell};
 use crate::native::prompt_runtime::thinking_segments;
@@ -66,7 +66,7 @@ impl Shell {
         });
         self.utility_panel = None;
         self.browser = None;
-        self.renaming_session = false;
+        self.renaming_session_id = None;
         self.composer_menu = None;
         self.draft_workspace_menu_open = false;
         self.draft_workspace_show_all = false;
@@ -91,6 +91,16 @@ impl Shell {
         cx.notify();
     }
 
+    pub(in crate::native) fn begin_new_session_in_workspace(
+        &mut self,
+        cwd: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.begin_new_session(window, cx);
+        self.set_draft_workspace(cwd, cx);
+    }
+
     pub(in crate::native) fn choose_draft_workspace(&mut self, cx: &mut Context<Self>) {
         if self.new_session_draft.is_none() {
             return;
@@ -109,7 +119,25 @@ impl Shell {
                 return;
             };
             let cwd = path.to_string_lossy().into_owned();
-            let _ = this.update(cx, |this, cx| this.set_draft_workspace(cwd, cx));
+            let _ = this.update(cx, |this, cx| {
+                let Some(client) = this.client.clone() else {
+                    return;
+                };
+                let request_cwd = cwd.clone();
+                let task =
+                    cx.background_spawn(async move { client.register_workspace(&request_cwd) });
+                cx.spawn(async move |this, cx| {
+                    let result = task.await.map_err(|error| error.to_string());
+                    let _ = this.update(cx, |this, cx| match result {
+                        Ok(workspace) => {
+                            this.model.upsert_workspace(workspace);
+                            this.set_draft_workspace(cwd.clone(), cx);
+                        }
+                        Err(error) => this.fail(error, cx),
+                    });
+                })
+                .detach();
+            });
         })
         .detach();
     }

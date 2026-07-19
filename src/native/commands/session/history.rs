@@ -5,7 +5,18 @@ use crate::native::app::{LoadState, Shell};
 
 impl Shell {
     pub(in crate::native) fn fork_active_session(&mut self, cx: &mut Context<Self>) {
-        let Some((client, session_id)) = self.active_request_context() else {
+        let Some(session_id) = self
+            .model
+            .active_session()
+            .map(|session| session.id.clone())
+        else {
+            return;
+        };
+        self.fork_session(session_id, cx);
+    }
+
+    pub(in crate::native) fn fork_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
             return;
         };
         self.state = LoadState::Working(self.strings.native.working.into());

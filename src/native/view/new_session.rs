@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::Path;
 
 use gpui::{Anchor, Context, IntoElement, Role, Window, div, prelude::*, px};
@@ -9,6 +8,7 @@ use gpui_component::{
 };
 
 use crate::native::{app::Shell, session_list::workspace_label, theme::*};
+use crate::protocol::Workspace;
 
 impl Shell {
     pub(super) fn new_session_landing(
@@ -21,22 +21,18 @@ impl Shell {
             .as_ref()
             .map(|draft| draft.cwd.as_str())
             .unwrap_or_default();
-        let mut seen = HashSet::new();
-        let workspaces = self
-            .model
-            .sessions()
+        let workspaces = self.model.workspaces().to_vec();
+        let workspace_name = workspaces
             .iter()
-            .filter_map(|session| {
-                let cwd = session.metadata.cwd.clone();
-                seen.insert(cwd.clone()).then_some(cwd)
-            })
-            .collect::<Vec<_>>();
+            .find(|workspace| workspace.root == cwd)
+            .map(|workspace| workspace.name.clone())
+            .unwrap_or_else(|| workspace_label(cwd));
         let strings = self.strings.native;
         let workspace_trigger = Button::new("draft-workspace-button")
             .small()
             .secondary()
             .icon(IconName::Folder)
-            .label(workspace_label(cwd))
+            .label(workspace_name)
             .dropdown_caret(true);
         let workspace_picker = Popover::new("draft-workspace-popover")
             .anchor(Anchor::BottomLeft)
@@ -103,7 +99,7 @@ impl Shell {
 
     fn draft_workspace_menu(
         &self,
-        workspaces: Vec<String>,
+        workspaces: Vec<Workspace>,
         selected_cwd: &str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -121,55 +117,51 @@ impl Shell {
             .role(Role::Menu)
             .max_h(px(420.0))
             .overflow_y_scroll()
-            .children(
-                workspaces
-                    .into_iter()
-                    .take(visible_count)
-                    .enumerate()
-                    .map(|(index, cwd)| {
-                        let active = cwd == selected_cwd;
-                        let cwd_for_click = cwd.clone();
-                        div()
-                            .id(("draft-workspace-option", index))
-                            .focusable()
-                            .tab_stop(true)
-                            .role(Role::MenuItem)
-                            .aria_label(format!(
-                                "{} {}",
-                                workspace_label(&cwd),
-                                compact_workspace_path(&cwd)
-                            ))
-                            .cursor_pointer()
-                            .rounded_md()
-                            .px_2()
-                            .py_2()
-                            .when(active, |row| row.bg(theme_rgb(ACCENT_SOFT)))
-                            .hover(|row| row.bg(theme_rgb(SURFACE_ACTIVE)))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.draft_workspace_menu_open = false;
-                                this.draft_workspace_show_all = false;
-                                this.set_draft_workspace(cwd_for_click.clone(), cx);
-                            }))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_size(font_px(12.0))
-                                            .font_medium()
-                                            .child(workspace_label(&cwd)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(font_px(10.0))
-                                            .text_color(theme_rgb(TEXT_MUTED))
-                                            .child(compact_workspace_path(&cwd)),
-                                    ),
-                            )
-                    }),
-            )
+            .children(workspaces.into_iter().take(visible_count).enumerate().map(
+                |(index, workspace)| {
+                    let active = workspace.root == selected_cwd;
+                    let cwd_for_click = workspace.root.clone();
+                    div()
+                        .id(("draft-workspace-option", index))
+                        .focusable()
+                        .tab_stop(true)
+                        .role(Role::MenuItem)
+                        .aria_label(format!(
+                            "{} {}",
+                            workspace.name,
+                            compact_workspace_path(&workspace.root)
+                        ))
+                        .cursor_pointer()
+                        .rounded_md()
+                        .px_2()
+                        .py_2()
+                        .when(active, |row| row.bg(theme_rgb(ACCENT_SOFT)))
+                        .hover(|row| row.bg(theme_rgb(SURFACE_ACTIVE)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.draft_workspace_menu_open = false;
+                            this.draft_workspace_show_all = false;
+                            this.set_draft_workspace(cwd_for_click.clone(), cx);
+                        }))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_size(font_px(12.0))
+                                        .font_medium()
+                                        .child(workspace.name),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(font_px(10.0))
+                                        .text_color(theme_rgb(TEXT_MUTED))
+                                        .child(compact_workspace_path(&workspace.root)),
+                                ),
+                        )
+                },
+            ))
             .when(remaining > 0, |menu| {
                 menu.child(
                     div()

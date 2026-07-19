@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use gpui::{ListAlignment, ListState, px};
 
-use crate::protocol::Session;
+use crate::protocol::{Session, Workspace};
 
 const INITIAL_VISIBLE_SESSIONS: usize = 5;
 
@@ -14,6 +14,7 @@ pub(super) struct SidebarSession {
     pub title: String,
     pub cwd: String,
     pub updated_at: String,
+    pub created_at: String,
     pub busy: bool,
     pub position: usize,
 }
@@ -23,6 +24,7 @@ pub(super) enum SessionListRow {
     Workspace {
         key: String,
         label: String,
+        root: String,
         collapsed: bool,
     },
     Session(SidebarSession),
@@ -46,6 +48,7 @@ impl SessionListRow {
 #[derive(Debug, PartialEq, Eq)]
 struct SessionGroup {
     label: String,
+    root: String,
     sessions: Vec<SidebarSession>,
     key: String,
 }
@@ -71,9 +74,16 @@ impl Default for SessionList {
 }
 
 impl SessionList {
-    pub fn sync(&mut self, sessions: &[Session], query: &str, active_session_id: Option<&str>) {
+    pub fn sync(
+        &mut self,
+        sessions: &[Session],
+        workspaces: Option<&[Workspace]>,
+        query: &str,
+        active_session_id: Option<&str>,
+    ) {
         let next = flattened_rows(
             sessions,
+            workspaces,
             query,
             active_session_id,
             &self.expanded_workspaces,
@@ -127,6 +137,10 @@ impl SessionList {
         }
     }
 
+    pub fn reveal_workspace(&mut self, key: &str) {
+        self.collapsed_workspaces.remove(key);
+    }
+
     pub fn toggle_expanded(&mut self, key: &str) {
         if !self.expanded_workspaces.insert(key.to_owned()) {
             self.expanded_workspaces.remove(key);
@@ -157,6 +171,17 @@ pub(super) fn display_title(title: &str) -> String {
 
 pub(super) fn relative_time(updated_at: &str, just_now: &str) -> String {
     relative_time_at(updated_at, Utc::now(), just_now)
+}
+
+pub(super) fn created_at_label(created_at: &str) -> String {
+    DateTime::parse_from_rfc3339(created_at)
+        .map(|created_at| {
+            created_at
+                .with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string()
+        })
+        .unwrap_or_else(|_| created_at.to_owned())
 }
 
 fn relative_time_at(updated_at: &str, now: DateTime<Utc>, just_now: &str) -> String {
@@ -192,6 +217,7 @@ fn relative_time_at(updated_at: &str, now: DateTime<Utc>, just_now: &str) -> Str
 
 fn flattened_rows(
     sessions: &[Session],
+    workspaces: Option<&[Workspace]>,
     query: &str,
     active_session_id: Option<&str>,
     expanded_workspaces: &HashSet<String>,
@@ -201,11 +227,12 @@ fn flattened_rows(
     let mut rows = Vec::new();
     let mut position = 0;
 
-    for group in grouped_sessions(sessions, query) {
+    for group in grouped_sessions(sessions, workspaces, query) {
         let collapsed = !searching && collapsed_workspaces.contains(&group.key);
         rows.push(SessionListRow::Workspace {
             key: group.key.clone(),
             label: group.label,
+            root: group.root,
             collapsed,
         });
         if collapsed {
@@ -250,8 +277,21 @@ fn flattened_rows(
     rows
 }
 
-fn grouped_sessions(sessions: &[Session], query: &str) -> Vec<SessionGroup> {
-    let mut groups: Vec<SessionGroup> = Vec::new();
+fn grouped_sessions(
+    sessions: &[Session],
+    workspaces: Option<&[Workspace]>,
+    query: &str,
+) -> Vec<SessionGroup> {
+    let mut groups = workspaces
+        .unwrap_or_default()
+        .iter()
+        .map(|workspace| SessionGroup {
+            key: workspace.id.clone(),
+            label: workspace.name.clone(),
+            root: workspace.root.clone(),
+            sessions: Vec::new(),
+        })
+        .collect::<Vec<_>>();
     for session in sessions
         .iter()
         .filter(|session| session_matches(query, &session.title, &session.metadata.cwd))
@@ -261,24 +301,38 @@ fn grouped_sessions(sessions: &[Session], query: &str) -> Vec<SessionGroup> {
         } else {
             session.workspace_id.clone()
         };
-        let group_index = groups
+        let group_index = match groups
             .iter()
-            .position(|group| group.key == key)
-            .unwrap_or_else(|| {
+            .position(|group| group.key == key || group.root == session.metadata.cwd)
+        {
+            Some(index) => index,
+            None if workspaces.is_none() => {
                 groups.push(SessionGroup {
                     key,
                     label: workspace_label(&session.metadata.cwd),
+                    root: session.metadata.cwd.clone(),
                     sessions: Vec::new(),
                 });
                 groups.len() - 1
-            });
+            }
+            None => continue,
+        };
         groups[group_index].sessions.push(SidebarSession {
             id: session.id.clone(),
             title: display_title(&session.title),
             cwd: session.metadata.cwd.clone(),
             updated_at: session.updated_at.clone(),
+            created_at: session.created_at.clone(),
             busy: session.busy,
             position: 0,
+        });
+    }
+    if !query.is_empty() {
+        let query = query.to_lowercase();
+        groups.retain(|group| {
+            !group.sessions.is_empty()
+                || group.label.to_lowercase().contains(&query)
+                || group.root.to_lowercase().contains(&query)
         });
     }
     groups
@@ -320,9 +374,21 @@ mod tests {
         .unwrap()
     }
 
+    fn workspace(id: &str, root: &str, name: &str) -> Workspace {
+        Workspace {
+            id: id.into(),
+            root: root.into(),
+            name: name.into(),
+            created_at: "2026-07-18T08:00:00Z".into(),
+            last_opened_at: "2026-07-19T08:00:00Z".into(),
+            session_count: 0,
+        }
+    }
+
     fn rows(sessions: &[Session], active_session_id: Option<&str>) -> Vec<SessionListRow> {
         flattened_rows(
             sessions,
+            None,
             "",
             active_session_id,
             &HashSet::new(),
@@ -386,20 +452,63 @@ mod tests {
     }
 
     #[test]
+    fn catalog_keeps_empty_workspaces_and_authoritative_names() {
+        let sessions = vec![session("a", "workspace-a", "/tmp/alpha", "Alpha session")];
+        let workspaces = vec![
+            workspace("workspace-b", "/tmp/beta", "Custom beta"),
+            workspace("workspace-a", "/tmp/alpha", "Custom alpha"),
+        ];
+        let rows = flattened_rows(
+            &sessions,
+            Some(&workspaces),
+            "",
+            None,
+            &HashSet::new(),
+            &HashSet::new(),
+        );
+
+        assert_eq!(rows.len(), 3);
+        assert!(matches!(
+            &rows[0],
+            SessionListRow::Workspace { label, root, .. }
+                if label == "Custom beta" && root == "/tmp/beta"
+        ));
+        assert!(matches!(
+            &rows[1],
+            SessionListRow::Workspace { label, .. } if label == "Custom alpha"
+        ));
+    }
+
+    #[test]
+    fn catalog_does_not_recreate_removed_workspaces_from_sessions() {
+        let sessions = vec![session("a", "workspace-a", "/tmp/alpha", "Alpha session")];
+        let rows = flattened_rows(
+            &sessions,
+            Some(&[]),
+            "",
+            None,
+            &HashSet::new(),
+            &HashSet::new(),
+        );
+
+        assert!(rows.is_empty());
+    }
+
+    #[test]
     fn sync_updates_the_virtual_list_count_after_search_and_pagination() {
         let sessions = vec![
             session("a", "workspace-a", "/tmp/alpha", "First"),
             session("b", "workspace-b", "/tmp/beta", "Second"),
         ];
         let mut list = SessionList::default();
-        list.sync(&sessions[..1], "", None);
+        list.sync(&sessions[..1], None, "", None);
         assert_eq!(list.list.item_count(), 2);
 
-        list.sync(&sessions, "", None);
+        list.sync(&sessions, None, "", None);
         assert_eq!(list.list.item_count(), 4);
         assert_eq!(list.session_count(), 2);
 
-        list.sync(&sessions, "beta", None);
+        list.sync(&sessions, None, "beta", None);
         assert_eq!(list.list.item_count(), 2);
         assert_eq!(list.session_count(), 1);
     }
@@ -450,7 +559,7 @@ mod tests {
         let mut list = SessionList::default();
 
         list.toggle_expanded("workspace-a");
-        list.sync(&sessions, "", None);
+        list.sync(&sessions, None, "", None);
         assert_eq!(list.session_count(), 7);
         assert!(matches!(
             list.rows.last(),
@@ -458,11 +567,11 @@ mod tests {
         ));
 
         list.toggle_workspace("workspace-a");
-        list.sync(&sessions, "", None);
+        list.sync(&sessions, None, "", None);
         assert_eq!(list.rows.len(), 1);
         assert_eq!(list.session_count(), 0);
 
-        list.sync(&sessions, "session", None);
+        list.sync(&sessions, None, "session", None);
         assert_eq!(list.rows.len(), 8);
         assert_eq!(list.session_count(), 7);
     }

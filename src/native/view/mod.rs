@@ -28,6 +28,7 @@ mod tool_card;
 mod toolbar;
 
 use gpui::{Context, IntoElement, Render, Role, Window, div, prelude::*};
+use gpui_component::input::Escape as InputEscape;
 
 use super::app::{Shell, UtilityPanel};
 use super::theme::*;
@@ -49,6 +50,13 @@ impl Render for Shell {
             .aria_label("Kimini")
             .on_action(cx.listener(|_, _: &FocusNext, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &FocusPrevious, window, cx| window.focus_prev(cx)))
+            .on_action(cx.listener(|this, _: &InputEscape, _, cx| {
+                if this.renaming_workspace_id.is_some() {
+                    this.cancel_workspace_rename(cx);
+                } else if this.renaming_session_id.is_some() {
+                    this.cancel_session_rename(cx);
+                }
+            }))
             .on_action(cx.listener(|this, _: &FocusSessionSearch, window, cx| {
                 this.open_session_search(window, cx);
             }))

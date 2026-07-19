@@ -120,6 +120,56 @@ fn creates_sessions_with_the_selected_model_in_the_initial_profile() {
 }
 
 #[test]
+fn manages_workspaces_through_the_daemon_catalog() {
+    let workspace = r#"{"id":"wd_project_0123456789ab","root":"/tmp/project","name":"Project","created_at":"2026-07-19T00:00:00Z","last_opened_at":"2026-07-19T01:00:00Z","session_count":0}"#;
+    let (origin, request) = one_response(format!(
+        r#"{{"code":0,"msg":"","data":{{"items":[{workspace}]}},"request_id":"req_list"}}"#
+    ));
+    let listed = KimiClient::new(Connection::new(origin, None))
+        .list_workspaces()
+        .unwrap();
+    assert_eq!(listed.items[0].name, "Project");
+    assert!(
+        request
+            .join()
+            .unwrap()
+            .starts_with("GET /api/v1/workspaces")
+    );
+
+    let (origin, request) = one_response(format!(
+        r#"{{"code":0,"msg":"","data":{workspace},"request_id":"req_post"}}"#
+    ));
+    KimiClient::new(Connection::new(origin, None))
+        .register_workspace("/tmp/project")
+        .unwrap();
+    let request = request.join().unwrap();
+    assert!(request.starts_with("POST /api/v1/workspaces"));
+    assert!(request.contains(r#"{"root":"/tmp/project"}"#));
+
+    let (origin, request) = one_response(format!(
+        r#"{{"code":0,"msg":"","data":{workspace},"request_id":"req_patch"}}"#
+    ));
+    KimiClient::new(Connection::new(origin, None))
+        .rename_workspace("wd/project", "Renamed")
+        .unwrap();
+    let request = request.join().unwrap();
+    assert!(request.starts_with("PATCH /api/v1/workspaces/wd%2Fproject"));
+    assert!(request.contains(r#"{"name":"Renamed"}"#));
+
+    let (origin, request) =
+        one_response(r#"{"code":0,"msg":"","data":{"deleted":true},"request_id":"req_delete"}"#);
+    KimiClient::new(Connection::new(origin, None))
+        .remove_workspace("wd/project")
+        .unwrap();
+    assert!(
+        request
+            .join()
+            .unwrap()
+            .starts_with("DELETE /api/v1/workspaces/wd%2Fproject")
+    );
+}
+
+#[test]
 fn posts_prompt_content_to_the_session_route() {
     let (origin, request) = one_response(
         r#"{"code":0,"msg":"","data":{"prompt_id":"prompt_01","user_message_id":"msg_01","status":"running"},"request_id":"req_01"}"#,

@@ -15,6 +15,7 @@ mod snapshot;
 mod status;
 mod task;
 mod terminal;
+mod workspace;
 
 pub use auth::{
     AuthSummary, ManagedProviderSummary, OAuthCancelResult, OAuthFlowSnapshot, OAuthFlowStart,
@@ -46,3 +47,4 @@ pub use terminal::{
 };
 #[cfg(feature = "native")]
 pub(crate) use terminal::{TerminalExitFrame, TerminalOutputFrame};
+pub use workspace::{Workspace, WorkspaceList};

@@ -158,6 +158,7 @@ pub(super) struct Shell {
     pub(super) session_search_selected: usize,
     pub(super) file_search: Entity<InputState>,
     pub(super) rename_editor: Entity<InputState>,
+    pub(super) workspace_rename_editor: Entity<InputState>,
     pub(super) browser_address: Entity<InputState>,
     pub(super) side_chat_input: Entity<InputState>,
     pub(super) terminal_input: Entity<InputState>,
@@ -193,7 +194,8 @@ pub(super) struct Shell {
     pub(super) draft_workspace_menu_open: bool,
     pub(super) draft_workspace_show_all: bool,
     pub(super) history_loading: bool,
-    pub(super) renaming_session: bool,
+    pub(super) renaming_session_id: Option<String>,
+    pub(super) renaming_workspace_id: Option<String>,
     pub(super) composer_session_id: Option<String>,
     pub(super) drafts: ComposerDrafts,
     pub(super) prompt_queues: PromptQueues,
@@ -241,6 +243,11 @@ impl Shell {
         let rename_editor = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(strings.native.rename_session)
+                .default_value("")
+        });
+        let workspace_rename_editor = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(strings.native.rename_workspace)
                 .default_value("")
         });
         let browser_address = cx.new(|cx| {
@@ -308,8 +315,23 @@ impl Shell {
                 &rename_editor,
                 window,
                 |this, _, event: &InputEvent, window, cx| {
-                    if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+                    if matches!(event, InputEvent::PressEnter { shift: false, .. })
+                        || matches!(event, InputEvent::Blur) && this.renaming_session_id.is_some()
+                    {
                         this.commit_session_rename(window, cx);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &workspace_rename_editor,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
+                        this.commit_workspace_rename(window, cx);
+                    } else if matches!(event, InputEvent::Blur)
+                        && this.renaming_workspace_id.is_some()
+                    {
+                        this.cancel_workspace_rename(cx);
                     }
                 },
             ),
@@ -347,6 +369,7 @@ impl Shell {
             session_search_selected: 0,
             file_search,
             rename_editor,
+            workspace_rename_editor,
             browser_address,
             side_chat_input,
             terminal_input,
@@ -382,7 +405,8 @@ impl Shell {
             draft_workspace_menu_open: false,
             draft_workspace_show_all: false,
             history_loading: false,
-            renaming_session: false,
+            renaming_session_id: None,
+            renaming_workspace_id: None,
             composer_session_id: None,
             drafts: ComposerDrafts::default(),
             prompt_queues: PromptQueues::default(),

@@ -15,6 +15,7 @@ mod side_chat;
 mod skills;
 mod tasks;
 mod terminal;
+mod workspace;
 
 use gpui::{Context, Task};
 

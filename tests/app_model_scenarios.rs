@@ -1,7 +1,7 @@
 mod support;
 
 use kimini::model::{AppModel, ApplyOutcome};
-use kimini::protocol::{MessagePage, Page, SessionSnapshot, SessionStatus, WireEvent};
+use kimini::protocol::{MessagePage, Page, SessionSnapshot, SessionStatus, WireEvent, Workspace};
 use support::{event, snapshot};
 
 #[test]
@@ -40,6 +40,45 @@ fn snapshots_update_the_single_session_catalog_without_duplicates() {
 
     assert_eq!(model.sessions().len(), 1);
     assert_eq!(model.sessions()[0].title, "Updated title");
+}
+
+#[test]
+fn workspace_catalog_updates_without_losing_order() {
+    let workspace = Workspace {
+        id: "wd_project_0123456789ab".into(),
+        root: "/tmp/project".into(),
+        name: "Project".into(),
+        created_at: "2026-07-19T00:00:00Z".into(),
+        last_opened_at: "2026-07-19T01:00:00Z".into(),
+        session_count: 1,
+    };
+    let mut model = AppModel::default();
+    model.replace_workspaces(vec![workspace.clone()]);
+
+    let mut renamed = workspace;
+    renamed.name = "Renamed".into();
+    model.upsert_workspace(renamed);
+    assert_eq!(model.workspaces()[0].name, "Renamed");
+
+    model.remove_workspace("wd_project_0123456789ab");
+    assert!(model.workspaces().is_empty());
+}
+
+#[test]
+fn removing_the_active_workspace_clears_its_session_selection() {
+    let mut model = AppModel::default();
+    model.replace_workspaces(vec![Workspace {
+        id: "ws_01".into(),
+        root: "/tmp/project".into(),
+        name: "Project".into(),
+        created_at: "2026-07-19T00:00:00Z".into(),
+        last_opened_at: "2026-07-19T01:00:00Z".into(),
+        session_count: 1,
+    }]);
+    model.seed(snapshot(7, "hello", ""));
+
+    assert!(model.remove_workspace("ws_01"));
+    assert!(model.active_session().is_none());
 }
 
 #[test]

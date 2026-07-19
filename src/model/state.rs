@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use crate::protocol::{
     ApprovalRequest, GoalSnapshot, Message, MessagePage, Page, QuestionRequest, Session,
-    SessionCursor, SessionSnapshot, SessionStatus,
+    SessionCursor, SessionSnapshot, SessionStatus, Workspace,
 };
 
 #[derive(Debug, Default)]
 pub struct AppModel {
+    pub(crate) workspaces: Vec<Workspace>,
     pub(crate) sessions: Vec<Session>,
     pub(crate) has_more_sessions: bool,
     pub(crate) archived_sessions: Vec<Session>,
@@ -30,6 +31,43 @@ pub struct Conversation {
 }
 
 impl AppModel {
+    pub fn replace_workspaces(&mut self, workspaces: Vec<Workspace>) {
+        self.workspaces = workspaces;
+    }
+
+    pub fn workspaces(&self) -> &[Workspace] {
+        &self.workspaces
+    }
+
+    pub fn upsert_workspace(&mut self, workspace: Workspace) {
+        if let Some(existing) = self
+            .workspaces
+            .iter_mut()
+            .find(|item| item.id == workspace.id)
+        {
+            *existing = workspace;
+        } else {
+            self.workspaces.push(workspace);
+        }
+    }
+
+    pub fn remove_workspace(&mut self, workspace_id: &str) -> bool {
+        let removed_root = self
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.id == workspace_id)
+            .map(|workspace| workspace.root.as_str());
+        let removed_active_session = self.active_session().is_some_and(|session| {
+            session.workspace_id == workspace_id
+                || removed_root.is_some_and(|root| session.metadata.cwd == root)
+        });
+        self.workspaces.retain(|item| item.id != workspace_id);
+        if removed_active_session {
+            self.active_session_id = None;
+        }
+        removed_active_session
+    }
+
     pub fn replace_sessions(&mut self, sessions: Vec<Session>) {
         self.replace_session_page(Page {
             items: sessions,

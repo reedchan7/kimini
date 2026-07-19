@@ -12,6 +12,7 @@ mod side_chat;
 mod skills;
 mod tasks;
 mod terminals;
+mod workspace;
 
 use std::time::Duration;
 
@@ -57,6 +58,14 @@ impl KimiClient {
     fn post<T: DeserializeOwned>(&self, path: &str, body: &impl Serialize) -> Result<T, ApiError> {
         let request = self
             .post_request(path)
+            .set("Content-Type", "application/json");
+        let response = request.send_json(body).map_err(transport_error)?;
+        decode(response)
+    }
+
+    fn patch<T: DeserializeOwned>(&self, path: &str, body: &impl Serialize) -> Result<T, ApiError> {
+        let request = self
+            .authorize(self.agent.request("PATCH", &self.url(path)))
             .set("Content-Type", "application/json");
         let response = request.send_json(body).map_err(transport_error)?;
         decode(response)

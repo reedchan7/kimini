@@ -13,6 +13,7 @@ impl Shell {
         } else {
             self.model.sessions()
         };
+        let workspaces = (!archived).then(|| self.model.workspaces());
         let active = (!archived && self.new_session_draft.is_none())
             .then(|| {
                 self.model
@@ -20,7 +21,8 @@ impl Shell {
                     .map(|session| session.id.clone())
             })
             .flatten();
-        self.session_list.sync(sessions, "", active.as_deref());
+        self.session_list
+            .sync(sessions, workspaces, "", active.as_deref());
         let visible_count = self.session_list.session_count();
         let list_empty = self.session_list.is_empty();
         let list_state = self.session_list.list.clone();

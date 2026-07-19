@@ -4,12 +4,13 @@ use crate::api::{KimiClient, KimiConfig, ServerMeta};
 use crate::daemon::{Connection, discover_connection};
 use crate::protocol::{
     AuthSummary, GoalSnapshot, ModelCatalogItem, Page, PromptQueue, Session, SessionSnapshot,
-    SessionStatus, SkillList, TaskList,
+    SessionStatus, SkillList, TaskList, Workspace,
 };
 
 pub(super) struct Bootstrap {
     pub connection: Connection,
     pub sessions: Page<Session>,
+    pub workspaces: Vec<Workspace>,
     pub active: Option<LoadedSession>,
     pub models: Vec<ModelCatalogItem>,
     pub auth: Option<AuthSummary>,
@@ -32,6 +33,10 @@ pub(super) fn load() -> Result<Bootstrap, String> {
         .ok_or_else(|| "Kimi daemon discovery was cancelled".to_owned())?;
     let client = KimiClient::new(connection.clone());
     let sessions = client.list_sessions().map_err(|error| error.to_string())?;
+    let workspaces = client
+        .list_workspaces()
+        .map_err(|error| error.to_string())?
+        .items;
     let models = client
         .list_models()
         .map(|catalog| catalog.items)
@@ -49,6 +54,7 @@ pub(super) fn load() -> Result<Bootstrap, String> {
     Ok(Bootstrap {
         connection,
         sessions,
+        workspaces,
         active,
         models,
         auth,

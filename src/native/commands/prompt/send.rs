@@ -2,7 +2,7 @@ use gpui::{AppContext, Context, Window};
 
 use crate::api::{ApiError, PromptResult};
 use crate::native::slash::SlashCommand;
-use crate::protocol::Session;
+use crate::protocol::{Session, Workspace};
 
 use super::super::super::app::{LoadState, Shell};
 use super::super::goals::GoalSubmission;
@@ -11,6 +11,7 @@ use super::{SkillSubmission, SubmissionMode};
 struct StartedSession {
     session: Session,
     prompt_error: Option<ApiError>,
+    workspaces: Option<Vec<Workspace>>,
 }
 
 impl StartedSession {
@@ -18,6 +19,7 @@ impl StartedSession {
         Self {
             session,
             prompt_error: result.err(),
+            workspaces: None,
         }
     }
 }
@@ -236,13 +238,18 @@ impl Shell {
         let task = cx.background_spawn(async move {
             let session = client.create_session(&cwd, model.as_deref())?;
             let prompt_result = client.submit_prompt_with_options(&session.id, &parts, &options);
-            Ok::<_, ApiError>(StartedSession::from_prompt_result(session, prompt_result))
+            let mut started = StartedSession::from_prompt_result(session, prompt_result);
+            started.workspaces = client.list_workspaces().ok().map(|list| list.items);
+            Ok::<_, ApiError>(started)
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(started) => {
+                        if let Some(workspaces) = started.workspaces {
+                            this.model.replace_workspaces(workspaces);
+                        }
                         let session_id = started.session.id.clone();
                         this.model.add_session(started.session);
                         match started.prompt_error {

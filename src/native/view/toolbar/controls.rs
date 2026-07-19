@@ -1,5 +1,3 @@
-use gpui::{Div, Role, SharedString, Stateful, div, prelude::*};
-
 use crate::native::{
     app::{LoadState, Shell},
     theme::*,
@@ -21,21 +19,4 @@ impl Shell {
             LoadState::Connecting | LoadState::Working(_) => TEXT_MUTED,
         }
     }
-}
-
-pub(super) fn toolbar_button(label: impl Into<SharedString>, id: &'static str) -> Stateful<Div> {
-    let label = label.into();
-    div()
-        .id(id)
-        .focusable()
-        .tab_stop(true)
-        .role(Role::Button)
-        .aria_label(label.clone())
-        .cursor_pointer()
-        .rounded_md()
-        .px_2()
-        .py_1()
-        .text_size(font_px(12.0))
-        .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
-        .child(label)
 }
