@@ -10,7 +10,7 @@ use super::{SkillSubmission, SubmissionMode};
 
 struct StartedSession {
     session: Session,
-    prompt_error: Option<ApiError>,
+    prompt_result: Result<PromptResult, ApiError>,
     workspaces: Option<Vec<Workspace>>,
 }
 
@@ -18,7 +18,7 @@ impl StartedSession {
     fn from_prompt_result(session: Session, result: Result<PromptResult, ApiError>) -> Self {
         Self {
             session,
-            prompt_error: result.err(),
+            prompt_result: result,
             workspaces: None,
         }
     }
@@ -136,6 +136,11 @@ impl Shell {
             }
             .into(),
         );
+        if mode == SubmissionMode::Send {
+            self.model.begin_prompt(&session_id, parts.clone());
+            self.transcript.rebuild(&self.model);
+        }
+        cx.notify();
         let request_session_id = session_id.clone();
         let submitted_text = text;
         let task = cx.background_spawn(async move {
@@ -161,14 +166,26 @@ impl Shell {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 match result {
-                    Ok(_) => {
+                    Ok(result) => {
                         this.attachments.clear_sent(&request_session_id);
                         this.drafts.remove(&request_session_id);
-                        if this.is_active_session(&request_session_id) {
+                        if mode == SubmissionMode::Send {
+                            this.model
+                                .accept_prompt(&request_session_id, &result.user_message_id);
+                            if this.is_active_session(&request_session_id) {
+                                this.transcript.rebuild(&this.model);
+                            }
+                        } else if this.is_active_session(&request_session_id) {
                             this.load_snapshot(request_session_id.clone(), cx);
                         }
                     }
                     Err(error) => {
+                        if mode == SubmissionMode::Send {
+                            this.model.fail_prompt(&request_session_id);
+                            if this.is_active_session(&request_session_id) {
+                                this.transcript.rebuild(&this.model);
+                            }
+                        }
                         this.restore_composer_draft(&request_session_id, submitted_text.clone());
                         if this.is_active_session(&request_session_id) {
                             this.state = LoadState::Failed(error.to_string());
@@ -228,11 +245,13 @@ impl Shell {
             && active.key() == draft_key
         {
             active.submitting = true;
+            active.submitted_parts = parts.clone();
         }
         self.composer
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.state = LoadState::Working(self.strings.native.working.into());
         let submitted_text = text;
+        let submitted_parts = parts.clone();
         let cwd = draft.cwd;
         let request_key = draft_key.clone();
         let task = cx.background_spawn(async move {
@@ -247,13 +266,18 @@ impl Shell {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(started) => {
-                        if let Some(workspaces) = started.workspaces {
+                        let StartedSession {
+                            session,
+                            prompt_result,
+                            workspaces,
+                        } = started;
+                        if let Some(workspaces) = workspaces {
                             this.model.replace_workspaces(workspaces);
                         }
-                        let session_id = started.session.id.clone();
-                        this.model.add_session(started.session);
-                        match started.prompt_error {
-                            Some(error) => {
+                        let session_id = session.id.clone();
+                        match prompt_result {
+                            Err(error) => {
+                                this.model.add_session(session);
                                 this.attachments.move_session(&request_key, &session_id);
                                 this.drafts.remove(&request_key);
                                 this.drafts.set(&session_id, submitted_text.clone());
@@ -269,15 +293,23 @@ impl Shell {
                                     );
                                 }
                             }
-                            None => {
+                            Ok(prompt_result) => {
                                 this.attachments.discard_session(&request_key);
                                 this.drafts.remove(&request_key);
                                 if this.active_composer_key().as_deref()
                                     == Some(request_key.as_str())
                                 {
+                                    this.model.activate_submitted_session(
+                                        session,
+                                        submitted_parts.clone(),
+                                        prompt_result.user_message_id,
+                                    );
+                                    this.transcript.rebuild(&this.model);
                                     this.new_session_draft = None;
                                     this.composer_session_id = None;
                                     this.load_snapshot(session_id, cx);
+                                } else {
+                                    this.model.add_session(session);
                                 }
                             }
                         }
@@ -287,6 +319,7 @@ impl Shell {
                             this.restore_new_session_draft(&request_key, submitted_text.clone());
                             if let Some(draft) = this.new_session_draft.as_mut() {
                                 draft.submitting = false;
+                                draft.submitted_parts.clear();
                             }
                         } else {
                             this.attachments.discard_session(&request_key);
@@ -343,6 +376,6 @@ mod tests {
         );
 
         assert_eq!(started.session.id, "session-1");
-        assert!(started.prompt_error.is_some());
+        assert!(started.prompt_result.is_err());
     }
 }

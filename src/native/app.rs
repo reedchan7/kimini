@@ -8,7 +8,7 @@ use crate::api::{EventSocket, KimiClient, KimiConfig, ServerMeta};
 use crate::daemon::Connection;
 use crate::i18n::{Lang, Strings};
 use crate::model::AppModel;
-use crate::protocol::ModelCatalogItem;
+use crate::protocol::{ModelCatalogItem, PromptPart};
 use crate::updater::Updater;
 
 use super::attachment::Attachments;
@@ -141,6 +141,7 @@ pub(super) struct NewSessionDraft {
     pub(super) plan_mode: bool,
     pub(super) swarm_mode: bool,
     pub(super) submitting: bool,
+    pub(super) submitted_parts: Vec<PromptPart>,
 }
 
 impl NewSessionDraft {

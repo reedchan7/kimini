@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::protocol::{
-    ApprovalRequest, GoalSnapshot, Message, MessagePage, Page, QuestionRequest, Session,
-    SessionCursor, SessionSnapshot, SessionStatus, Workspace,
+    ApprovalRequest, GoalSnapshot, Message, MessagePage, Page, PromptPart, QuestionRequest,
+    Session, SessionCursor, SessionSnapshot, SessionStatus, Workspace,
 };
 
 #[derive(Debug, Default)]
@@ -23,11 +23,18 @@ pub struct Conversation {
     pub has_more_messages: bool,
     pub assistant_stream: Option<String>,
     pub thinking_stream: Option<String>,
+    pub(crate) optimistic_user: Option<OptimisticUserMessage>,
     pub approvals: Vec<ApprovalRequest>,
     pub questions: Vec<QuestionRequest>,
     pub cursor: SessionCursor,
     pub runtime: Option<SessionStatus>,
     pub goal: Option<GoalSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OptimisticUserMessage {
+    pub id: String,
+    pub content: Vec<PromptPart>,
 }
 
 impl AppModel {
@@ -169,14 +176,9 @@ impl AppModel {
         let session_id = snapshot.session.id.clone();
         let cursor = snapshot.cursor();
         let has_more_messages = snapshot.messages.has_more;
-        let assistant_stream = snapshot
-            .in_flight_turn
-            .as_ref()
-            .map(|turn| turn.assistant_text.clone())
-            .filter(|text| !text.is_empty());
-        let thinking_stream = snapshot
-            .in_flight_turn
-            .as_ref()
+        let in_flight_turn = snapshot.in_flight_turn.as_ref();
+        let assistant_stream = in_flight_turn.map(|turn| turn.assistant_text.clone());
+        let thinking_stream = in_flight_turn
             .map(|turn| turn.thinking_text.clone())
             .filter(|text| !text.is_empty());
         let conversation = Conversation {
@@ -184,6 +186,7 @@ impl AppModel {
             has_more_messages,
             assistant_stream,
             thinking_stream,
+            optimistic_user: None,
             approvals: snapshot.pending_approvals,
             questions: snapshot.pending_questions,
             cursor,
@@ -223,6 +226,72 @@ impl AppModel {
 
     pub fn active_goal(&self) -> Option<&GoalSnapshot> {
         self.active_conversation()?.goal.as_ref()
+    }
+
+    pub fn begin_prompt(&mut self, session_id: &str, content: Vec<PromptPart>) -> bool {
+        let Some(conversation) = self.conversations.get_mut(session_id) else {
+            return false;
+        };
+        conversation.optimistic_user = Some(OptimisticUserMessage {
+            id: format!("optimistic-user:{session_id}"),
+            content,
+        });
+        conversation.assistant_stream = Some(String::new());
+        conversation.thinking_stream = None;
+        true
+    }
+
+    pub fn activate_submitted_session(
+        &mut self,
+        session: Session,
+        content: Vec<PromptPart>,
+        user_message_id: String,
+    ) {
+        let session_id = session.id.clone();
+        self.add_session(session);
+        self.conversations.insert(
+            session_id.clone(),
+            Conversation {
+                messages: Vec::new(),
+                has_more_messages: false,
+                assistant_stream: Some(String::new()),
+                thinking_stream: None,
+                optimistic_user: Some(OptimisticUserMessage {
+                    id: user_message_id,
+                    content,
+                }),
+                approvals: Vec::new(),
+                questions: Vec::new(),
+                cursor: SessionCursor::new(0, None),
+                runtime: None,
+                goal: None,
+            },
+        );
+        self.active_session_id = Some(session_id);
+    }
+
+    pub fn accept_prompt(&mut self, session_id: &str, user_message_id: &str) {
+        let Some(conversation) = self.conversations.get_mut(session_id) else {
+            return;
+        };
+        if conversation
+            .messages
+            .iter()
+            .any(|message| message.id == user_message_id)
+        {
+            conversation.optimistic_user = None;
+        } else if let Some(message) = conversation.optimistic_user.as_mut() {
+            message.id = user_message_id.into();
+        }
+    }
+
+    pub fn fail_prompt(&mut self, session_id: &str) {
+        let Some(conversation) = self.conversations.get_mut(session_id) else {
+            return;
+        };
+        conversation.optimistic_user = None;
+        conversation.assistant_stream = None;
+        conversation.thinking_stream = None;
     }
 
     pub fn prepend_messages(&mut self, session_id: &str, mut page: MessagePage) -> bool {

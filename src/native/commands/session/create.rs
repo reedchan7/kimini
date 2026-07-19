@@ -63,6 +63,7 @@ impl Shell {
             plan_mode: false,
             swarm_mode: false,
             submitting: false,
+            submitted_parts: Vec::new(),
         });
         self.utility_panel = None;
         self.browser = None;

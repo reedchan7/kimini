@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use gpui::{Anchor, Context, IntoElement, Role, Window, div, prelude::*, px};
+use gpui::{Anchor, AnyElement, Context, IntoElement, Role, Window, div, prelude::*, px};
 use gpui_component::{
     Icon, IconName, Sizable as _, StyledExt,
     button::{Button, ButtonVariants},
@@ -15,7 +15,35 @@ impl Shell {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        if let Some(parts) = self
+            .new_session_draft
+            .as_ref()
+            .filter(|draft| draft.submitting)
+            .map(|draft| draft.submitted_parts.clone())
+        {
+            return div()
+                .id("new-session-pending")
+                .role(Role::Document)
+                .aria_label(self.strings.native.conversation)
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(CONTENT_WIDTH))
+                        .flex_1()
+                        .min_h_0()
+                        .pt_4()
+                        .child(self.pending_prompt_preview(&parts, cx)),
+                )
+                .child(self.composer(window, cx))
+                .into_any_element();
+        }
         let cwd = self
             .new_session_draft
             .as_ref()
@@ -95,6 +123,7 @@ impl Shell {
                     .child(div().mt_4().child(workspace_picker))
                     .child(div().mt_4().w_full().child(self.composer(window, cx))),
             )
+            .into_any_element()
     }
 
     fn draft_workspace_menu(

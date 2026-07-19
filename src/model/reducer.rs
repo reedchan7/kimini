@@ -48,7 +48,7 @@ impl AppModel {
             | "event.turn.step.retrying"
                 if is_main_agent(&event) =>
             {
-                conversation.assistant_stream = None;
+                conversation.assistant_stream = Some(String::new());
                 conversation.thinking_stream = None;
             }
             "event.message.created" => {
@@ -56,6 +56,10 @@ impl AppModel {
                     if message.role == crate::protocol::MessageRole::Assistant {
                         conversation.assistant_stream = None;
                         conversation.thinking_stream = None;
+                    } else if message.role == crate::protocol::MessageRole::User
+                        && conversation.optimistic_user.is_some()
+                    {
+                        conversation.optimistic_user = None;
                     }
                     upsert_message(&mut conversation.messages, message);
                 }
@@ -67,6 +71,9 @@ impl AppModel {
                 }
             }
             "thinking.delta" | "event.thinking.delta" if is_main_agent(&event) => {
+                conversation
+                    .assistant_stream
+                    .get_or_insert_with(String::new);
                 let delta = event.payload.get("delta").and_then(|value| value.as_str());
                 if !append_delta(&mut conversation.thinking_stream, event.offset, delta) {
                     return ApplyOutcome::ResyncRequired;

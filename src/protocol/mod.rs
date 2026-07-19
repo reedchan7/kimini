@@ -34,7 +34,7 @@ pub use message::{MediaSource, Message, MessageContent, MessagePage, MessageRole
 pub use model::{Catalog, ModelCatalogItem};
 pub use prompt::{
     PromptAbortResult, PromptItem, PromptOptions, PromptPart, PromptQueue, PromptStatus,
-    PromptSteerResult,
+    PromptSteerResult, UploadedFileSource,
 };
 pub use session::{Page, Session};
 pub use side_chat::SideChatStart;

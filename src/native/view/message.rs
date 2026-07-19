@@ -1,10 +1,12 @@
-use gpui::{AnyElement, Context, Role, div, prelude::*};
+use std::time::Duration;
+
+use gpui::{Animation, AnimationExt, AnyElement, Context, Role, div, prelude::*, px};
 use gpui_component::{StyledExt, text::TextView};
 
-use crate::protocol::MessageRole;
+use crate::protocol::{MessageRole, PromptPart};
 
 use super::super::app::Shell;
-use super::super::presentation::{AttachmentKind, TranscriptBlock};
+use super::super::presentation::{AttachmentKind, TranscriptBlock, TranscriptRow};
 use super::super::theme::*;
 
 impl Shell {
@@ -12,13 +14,42 @@ impl Shell {
         let Some(row) = self.transcript.rows.get(index) else {
             return div().into_any_element();
         };
+        self.render_message_row(index, row, cx)
+    }
+
+    pub(super) fn pending_prompt_preview(
+        &self,
+        parts: &[PromptPart],
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let user = TranscriptRow::from_prompt_parts("new-session-user", parts);
+        let pending = TranscriptRow::from_stream("new-session", None, Some(""))
+            .expect("a pending stream always has a row");
+        div()
+            .w_full()
+            .child(self.render_message_row(0, &user, cx))
+            .child(self.render_message_row(1, &pending, cx))
+            .into_any_element()
+    }
+
+    fn render_message_row(
+        &self,
+        index: usize,
+        row: &TranscriptRow,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let speaker = speaker(row.role, self.strings.native);
         let blocks = self.render_blocks(index, &row.blocks, cx);
         let is_user = row.role == MessageRole::User;
+        let waiting = row.streaming && row.blocks.is_empty();
         div()
             .id(("message", index))
             .role(Role::Article)
-            .aria_label(format!("{speaker}: {}", row.accessible_text()))
+            .aria_label(if waiting {
+                self.strings.native.waiting_for_response.into()
+            } else {
+                format!("{speaker}: {}", row.accessible_text())
+            })
             .w_full()
             .px_3()
             .pb_5()
@@ -42,27 +73,54 @@ impl Shell {
                                     .border_color(theme_rgb(BORDER_STRONG))
                                     .pl_3()
                             })
-                            .when(row.role == MessageRole::System || row.streaming, |body| {
-                                body.child(
-                                    div()
-                                        .mb_2()
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .text_size(gpui::px(11.0))
-                                        .font_semibold()
-                                        .text_color(theme_rgb(TEXT_MUTED))
-                                        .child(speaker)
-                                        .when(row.streaming, |header| {
-                                            header
-                                                .child(format!("· {}", self.strings.native.working))
-                                        }),
-                                )
+                            .when(waiting, |body| {
+                                body.child(self.kimi_waiting_indicator(index, cx))
                             })
+                            .when(
+                                !waiting && (row.role == MessageRole::System || row.streaming),
+                                |body| {
+                                    body.child(
+                                        div()
+                                            .mb_2()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .text_size(gpui::px(11.0))
+                                            .font_semibold()
+                                            .text_color(theme_rgb(TEXT_MUTED))
+                                            .child(speaker),
+                                    )
+                                },
+                            )
                             .children(blocks),
                     ),
             )
             .into_any_element()
+    }
+
+    fn kimi_waiting_indicator(&self, key: usize, cx: &Context<Self>) -> AnyElement {
+        const FRAMES: [&str; 8] = ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"];
+        let moon = div()
+            .id(("kimi-waiting-indicator", key))
+            .role(Role::Image)
+            .aria_label(self.strings.native.waiting_for_response)
+            .size(px(18.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(18.0));
+        if cx.reduce_motion() {
+            return moon.child(FRAMES[3]).into_any_element();
+        }
+        moon.with_animation(
+            ("kimi-moon-frame", key),
+            Animation::new(Duration::from_millis(960)).repeat(),
+            move |moon, delta| {
+                let frame = (delta * FRAMES.len() as f32).floor() as usize % FRAMES.len();
+                moon.child(FRAMES[frame])
+            },
+        )
+        .into_any_element()
     }
 
     fn render_blocks(

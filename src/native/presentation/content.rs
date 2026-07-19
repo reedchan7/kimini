@@ -1,4 +1,5 @@
-use crate::protocol::{Message, MessageContent, MessageRole};
+use crate::model::OptimisticUserMessage;
+use crate::protocol::{Message, MessageContent, MessageRole, PromptPart, UploadedFileSource};
 
 use super::tool::{ToolCard, ToolIndex, display_value};
 
@@ -60,12 +61,57 @@ impl TranscriptRow {
         if let Some(text) = assistant.filter(|text| !text.is_empty()) {
             blocks.push(TranscriptBlock::Text(text.into()));
         }
-        (!blocks.is_empty()).then(|| Self {
+        (assistant.is_some() || !blocks.is_empty()).then(|| Self {
             id: format!("stream:{session_id}"),
             role: MessageRole::Assistant,
             blocks,
             streaming: true,
         })
+    }
+
+    pub(in crate::native) fn from_optimistic_user(message: &OptimisticUserMessage) -> Self {
+        Self::from_prompt_parts(message.id.clone(), &message.content)
+    }
+
+    pub(in crate::native) fn from_prompt_parts(
+        id: impl Into<String>,
+        content: &[PromptPart],
+    ) -> Self {
+        let blocks = content
+            .iter()
+            .filter_map(|part| match part {
+                PromptPart::Text { text } if !text.is_empty() => {
+                    Some(TranscriptBlock::Text(text.clone()))
+                }
+                PromptPart::Text { .. } => None,
+                PromptPart::Image { source } => Some(TranscriptBlock::Attachment {
+                    kind: AttachmentKind::Image,
+                    name: "Image".into(),
+                    detail: uploaded_file_id(source).into(),
+                }),
+                PromptPart::Video { source } => Some(TranscriptBlock::Attachment {
+                    kind: AttachmentKind::Video,
+                    name: "Video".into(),
+                    detail: uploaded_file_id(source).into(),
+                }),
+                PromptPart::File {
+                    name,
+                    media_type,
+                    size,
+                    ..
+                } => Some(TranscriptBlock::Attachment {
+                    kind: AttachmentKind::File,
+                    name: name.clone(),
+                    detail: format!("{media_type} · {size} bytes"),
+                }),
+            })
+            .collect();
+        Self {
+            id: id.into(),
+            role: MessageRole::User,
+            blocks,
+            streaming: false,
+        }
     }
 
     pub(in crate::native) fn accessible_text(&self) -> String {
@@ -81,6 +127,12 @@ impl TranscriptRow {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+}
+
+fn uploaded_file_id(source: &UploadedFileSource) -> &str {
+    match source {
+        UploadedFileSource::File { file_id } => file_id,
     }
 }
 

@@ -98,6 +98,7 @@ mod tests {
             plan_mode: false,
             swarm_mode: false,
             submitting: false,
+            submitted_parts: Vec::new(),
         }
     }
 
