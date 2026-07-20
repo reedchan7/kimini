@@ -162,13 +162,6 @@ pub(super) fn content_font_px() -> Pixels {
     font_px(15.0)
 }
 
-/// `--text-lg` (16px). The Web user bubble clamps its body to
-/// `max(16px, ui-font-size-xl)`, so user prompts render at least 16px even
-/// when the global font-size setting is at the default.
-pub(super) fn text_lg_font_px() -> Pixels {
-    font_px(16.0)
-}
-
 /// Default chrome labels: sidebar rows, toolbar title, settings rows.
 pub(super) fn ui_font_px() -> Pixels {
     font_px(13.0)
@@ -363,7 +356,6 @@ mod tests {
     #[test]
     fn content_and_text_lg_pin_web_font_sizes() {
         assert_eq!(content_font_px(), font_px(15.0));
-        assert_eq!(text_lg_font_px(), font_px(16.0));
         assert_eq!(CHAT_TURN_GAP, 16.0);
         assert_eq!(CHAT_BLOCK_GAP, 10.0);
     }

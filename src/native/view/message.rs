@@ -76,9 +76,13 @@ impl Shell {
                     .child(
                         div()
                             .when(is_user, |body| {
-                                // Web `.u-bub`: max-width 78%, accent-tinted fill,
+                                // Web `.u-bub` (verified against real computed
+                                // style): max-width 78%, accent-tinted fill,
                                 // accent border, asymmetric "tail" radius
-                                // (16/16/6/16), 11×15 padding, subtle shadow.
+                                // (16/16/6/16), 11×15 padding, subtle shadow,
+                                // 15px regular body (NOT 16 — the Web computed
+                                // shows 15px, the max(16,...) rule is overridden
+                                // by .md .markdown-renderer p { content-font-size }).
                                 body.max_w(relative(0.78))
                                     .bg(theme_rgb(ACCENT_SOFT))
                                     .border_1()
@@ -93,7 +97,7 @@ impl Shell {
                                     .px(px(15.0))
                                     .py(px(11.0))
                                     .shadow_xs()
-                                    .text_size(text_lg_font_px())
+                                    .text_size(content_font_px())
                             })
                             .when(!is_user, |body| {
                                 // Web `.a-msg`: 94% column, medium-weight body.
