@@ -174,6 +174,9 @@ impl Shell {
                                 .accept_prompt(&request_session_id, &result.user_message_id);
                             if this.is_active_session(&request_session_id) {
                                 this.transcript.rebuild(&this.model);
+                                // Backup path: daemon may not stream assistant.delta;
+                                // poll until idle and reload the settled snapshot.
+                                this.watch_turn_until_idle(request_session_id.clone(), cx);
                             }
                         } else if this.is_active_session(&request_session_id) {
                             this.load_snapshot(request_session_id.clone(), cx);
@@ -307,7 +310,8 @@ impl Shell {
                                     this.transcript.rebuild(&this.model);
                                     this.new_session_draft = None;
                                     this.composer_session_id = None;
-                                    this.load_snapshot(session_id, cx);
+                                    this.load_snapshot(session_id.clone(), cx);
+                                    this.watch_turn_until_idle(session_id, cx);
                                 } else {
                                     this.model.add_session(session);
                                 }

@@ -89,7 +89,7 @@ impl Shell {
             let socket = EventSocket::connect(
                 connection,
                 "kimini-native",
-                BTreeMap::from([(session_id, cursor)]),
+                BTreeMap::from([(session_id.clone(), cursor)]),
             );
             self.socket_generation = self.socket_generation.wrapping_add(1);
             let generation = self.socket_generation;
@@ -109,6 +109,62 @@ impl Shell {
             })
             .detach();
         }
+        // Daemon journals often omit assistant.delta/message.created. If the
+        // turn is still running after this snapshot, poll until idle and reload
+        // so the final assistant message is not lost when socket catch-up fails.
+        let turn_active = self.model.active_session().is_some_and(|session| {
+            session.busy || session.main_turn_active.unwrap_or(false)
+        }) || self.model.active_conversation().is_some_and(|conversation| {
+            conversation.assistant_stream.is_some()
+                && !conversation
+                    .messages
+                    .iter()
+                    .any(|message| message.role == crate::protocol::MessageRole::Assistant)
+        });
+        if turn_active {
+            self.watch_turn_until_idle(session_id, cx);
+        }
+    }
+
+    /// Poll session status until the main turn settles, then reload the snapshot.
+    /// Acts as a backup when WebSocket streaming events are missing or delayed.
+    pub(super) fn watch_turn_until_idle(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.turn_watch_generation = self.turn_watch_generation.wrapping_add(1);
+        let generation = self.turn_watch_generation;
+        let task = cx.background_spawn(async move {
+            use std::time::Duration;
+            for _ in 0..90 {
+                match client.session_status(&session_id) {
+                    Ok(status) if !status.busy => break,
+                    _ => std::thread::sleep(Duration::from_millis(400)),
+                }
+            }
+            Ok::<_, crate::api::ApiError>(session_id)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                if generation != this.turn_watch_generation {
+                    return;
+                }
+                match result {
+                    Ok(session_id) if this.is_active_session(&session_id) => {
+                        this.load_snapshot(session_id, cx);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        if matches!(this.state, LoadState::Working(_)) {
+                            this.state = LoadState::Failed(error.to_string());
+                            cx.notify();
+                        }
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     fn handle_socket_event(&mut self, generation: u64, event: SocketEvent, cx: &mut Context<Self>) {

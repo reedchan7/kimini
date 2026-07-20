@@ -48,7 +48,7 @@ impl Shell {
         .detach();
     }
 
-    fn is_active_session(&self, session_id: &str) -> bool {
+    pub(super) fn is_active_session(&self, session_id: &str) -> bool {
         self.new_session_draft.is_none()
             && self
                 .model

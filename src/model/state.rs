@@ -177,7 +177,17 @@ impl AppModel {
         let cursor = snapshot.cursor();
         let has_more_messages = snapshot.messages.has_more;
         let in_flight_turn = snapshot.in_flight_turn.as_ref();
-        let assistant_stream = in_flight_turn.map(|turn| turn.assistant_text.clone());
+        let turn_active = snapshot.session.busy
+            || snapshot.session.main_turn_active.unwrap_or(false)
+            || in_flight_turn.is_some();
+        // Daemon 0.27+ often omits assistant.delta / message.created from the
+        // event journal. While a turn is still active, keep an empty stream so
+        // the UI continues to show the waiting indicator until settlement.
+        let assistant_stream = match in_flight_turn {
+            Some(turn) => Some(turn.assistant_text.clone()),
+            None if turn_active => Some(String::new()),
+            None => None,
+        };
         let thinking_stream = in_flight_turn
             .map(|turn| turn.thinking_text.clone())
             .filter(|text| !text.is_empty());
