@@ -161,9 +161,26 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "    mode: dry-run (no tag / no publish)"
 fi
 
-if [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+status_porcelain="$(git status --porcelain 2>/dev/null)" || {
+  echo "error: git status failed" >&2
+  exit 1
+}
+if [[ -n "$status_porcelain" ]]; then
+  if [[ "${SHIP_REQUIRE_CLEAN:-0}" == "1" ]] || [[ "${REQUIRE_CLEAN:-0}" == "1" ]]; then
+    echo "error: working tree is dirty; refuse to package/publish" >&2
+    printf '%s\n' "$status_porcelain" >&2
+    exit 1
+  fi
   echo "warning: working tree is dirty — release will point at current HEAD" >&2
-  git status --short >&2 || true
+  printf '%s\n' "$status_porcelain" >&2
+fi
+
+if [[ -n "${SHIP_EXPECTED_SHA:-}" ]]; then
+  head_now="$(git rev-parse HEAD)"
+  if [[ "$head_now" != "$SHIP_EXPECTED_SHA" ]]; then
+    echo "error: HEAD ${head_now} != SHIP_EXPECTED_SHA ${SHIP_EXPECTED_SHA}" >&2
+    exit 1
+  fi
 fi
 
 # Prefer rustup-managed cargo so cross targets resolve.
@@ -276,10 +293,26 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 # Optional local git tag so the release points at a named ref in the clone.
+# Tag is created only after packaging/signing succeed (this block is past that).
 if [[ "$NO_GIT_TAG" -eq 0 ]]; then
-  if git rev-parse "$TAG" >/dev/null 2>&1; then
-    existing="$(git rev-list -n 1 "$TAG")"
-    head="$(git rev-parse HEAD)"
+  head="$(git rev-parse HEAD)"
+  if [[ -n "${SHIP_EXPECTED_SHA:-}" && "$head" != "$SHIP_EXPECTED_SHA" ]]; then
+    echo "error: HEAD moved before tagging (${head} != ${SHIP_EXPECTED_SHA})" >&2
+    exit 1
+  fi
+  if [[ "${SHIP_REQUIRE_CLEAN:-0}" == "1" || "${REQUIRE_CLEAN:-0}" == "1" ]]; then
+    post_status="$(git status --porcelain 2>/dev/null)" || {
+      echo "error: git status failed after packaging" >&2
+      exit 1
+    }
+    if [[ -n "$post_status" ]]; then
+      echo "error: working tree became dirty after packaging; refuse to tag/publish" >&2
+      printf '%s\n' "$post_status" >&2
+      exit 1
+    fi
+  fi
+  if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+    existing="$(git rev-parse "refs/tags/${TAG}^{commit}")"
     if [[ "$existing" != "$head" ]]; then
       echo "error: tag $TAG already exists at $existing, but HEAD is $head" >&2
       echo "  bump Cargo.toml version, or delete the tag if it was a mistake" >&2
@@ -287,15 +320,29 @@ if [[ "$NO_GIT_TAG" -eq 0 ]]; then
     fi
     echo "==> git tag $TAG already points at HEAD"
   else
-    echo "==> git tag $TAG"
-    git tag -a "$TAG" -m "Kimini ${TAG}"
+    echo "==> git tag $TAG at $head"
+    git tag -a "$TAG" -m "Kimini ${TAG}" "$head"
   fi
 
-  # Push tag if remote is missing it (best-effort detect origin).
-  remote="$(git remote 2>/dev/null | awk 'NR==1{print; exit}')"
-  remote="${remote:-origin}"
-  if git ls-remote --tags "$remote" "refs/tags/${TAG}" 2>/dev/null | rg -q .; then
-    echo "==> remote ${remote} already has ${TAG}"
+  # Always use origin (or SHIP_REMOTE); never "first remote".
+  remote="${SHIP_REMOTE:-origin}"
+  local_tag_commit="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+  # ls-remote prints both the tag object and peeled commit for annotated tags.
+  remote_lines="$(git ls-remote --tags "$remote" "refs/tags/${TAG}" "refs/tags/${TAG}^{}" 2>/dev/null || true)"
+  remote_peeled="$(printf '%s\n' "$remote_lines" | awk '/\^\{\}$/ {print $1; exit}')"
+  remote_tag_obj="$(printf '%s\n' "$remote_lines" | awk '!/\^\{\}$/ && NF {print $1; exit}')"
+  if [[ -n "$remote_tag_obj" || -n "$remote_peeled" ]]; then
+    if [[ -z "$remote_peeled" ]]; then
+      echo "error: remote ${remote} has ${TAG} but peeled commit could not be proven" >&2
+      echo "  ls-remote output:" >&2
+      printf '%s\n' "$remote_lines" >&2
+      exit 1
+    fi
+    if [[ "$remote_peeled" != "$local_tag_commit" ]]; then
+      echo "error: remote ${remote} has ${TAG} at ${remote_peeled}, local is ${local_tag_commit}" >&2
+      exit 1
+    fi
+    echo "==> remote ${remote} already has ${TAG} at ${remote_peeled}"
   else
     echo "==> git push ${remote} ${TAG}"
     git push "$remote" "$TAG"
@@ -322,11 +369,18 @@ if [[ "$VERSION" == *-* ]]; then
 fi
 
 if gh release view "$TAG" >/dev/null 2>&1; then
-  echo "==> release $TAG exists; uploading assets (clobber)"
+  existing_draft="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo false)"
+  if [[ "${SHIP_REQUIRE_CLEAN:-0}" == "1" && "$existing_draft" != "true" && "$DRAFT" -eq 0 ]]; then
+    # Ship path: allow asset re-upload only when tag commit matches HEAD (checked above).
+    echo "==> release $TAG exists (published); re-uploading assets with --clobber (same tag)"
+  else
+    echo "==> release $TAG exists; uploading assets (clobber)"
+  fi
   gh release upload "$TAG" "${ARTIFACTS[@]}" --clobber
-  if [[ "$DRAFT" -eq 0 ]]; then
-    # Ensure non-draft if caller wants a published release
-    gh release edit "$TAG" --draft=false >/dev/null 2>&1 || true
+  if [[ "$DRAFT" -eq 1 ]]; then
+    gh release edit "$TAG" --draft=true
+  elif [[ "$DRAFT" -eq 0 ]]; then
+    gh release edit "$TAG" --draft=false
   fi
 else
   echo "==> gh ${release_args[*]} + assets"

@@ -52,7 +52,7 @@ PUBLISH_FLAGS ?=
         package-linux package-linux-native package-windows publish-release \
         publish-release-all sparkle install-app install-web-app \
         uninstall-app uninstall-web-app uninstall-all \
-        open-app open-web-app
+        open-app open-web-app ship-plan
 
 # ---------------------------------------------------------------------------
 # Help (default)
@@ -127,6 +127,9 @@ publish-release-all: ## Publish macOS + Linux + staged Windows asset matrix
 	bash ./$(PUBLISH_SH) --include-portable $(PUBLISH_FLAGS)
 
 clean-all: clean clean-dist ## cargo clean + remove dist/
+
+ship-plan: ## Read-only ship plan (BUMP=default|patch|minor|major|X.Y.Z)
+	bash ./scripts/ship.sh plan --bump '$(or $(BUMP),default)'
 
 # ---------------------------------------------------------------------------
 # Build

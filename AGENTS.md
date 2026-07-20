@@ -119,8 +119,12 @@ the Kimi daemon's typed `/api/v1` REST and WebSocket contracts directly.
 - Build Web: `make build-web`; run: `make run-web`; package: `make app-web`.
 - Build both bundles: `make apps`; both architectures and formats:
   `make package-all`.
-- Release (preferred): bump `Cargo.toml` version, then `make publish-release`.
-  Dry run: `make publish-release PUBLISH_FLAGS=--dry-run`.
+- Release (preferred): project skill `.agents/skills/ship` (`/ship` / “ship”,
+  default patch) via `scripts/ship.sh` → `make publish-release`. Read-only
+  plan: `make ship-plan` or `bash scripts/ship.sh plan` (no fetch/write).
+  Packaging dry-run only: `make publish-release PUBLISH_FLAGS=--dry-run`
+  (builds `dist/`; not a plan-only mode). Claude Code: `.claude/skills/ship`
+  → `.agents/skills/ship`.
 - CI and release Actions remain manual (`workflow_dispatch`).
 - Native startup discovers `~/.kimi-code/server/lock` plus `server.token`,
   health-probes the daemon, and starts `kimi server run` when absent.
