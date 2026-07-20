@@ -61,7 +61,9 @@ impl Shell {
             .w_full()
             .flex()
             .justify_center()
-            .px_3()
+            // Web `.chat` padding-inline is 20px — matches the composer's
+            // outer gutters and the reference reading measure.
+            .px(px(20.0))
             // Web `--chat-turn-gap` between turns. Use the gap token directly
             // so changing the design constant later ripples here.
             .pb(px(CHAT_TURN_GAP))
@@ -246,7 +248,7 @@ impl Shell {
                         .child(
                             streaming_text_view(&entity)
                                 .text_size(content_font_px())
-                                .line_height(relative(1.6)),
+                                .line_height(relative(1.5)),
                         )
                         .child(self.streaming_caret(key, cx))
                         .into_any_element()
@@ -254,7 +256,7 @@ impl Shell {
                     TextView::markdown(("message-markdown", key), text.clone())
                         .selectable(true)
                         .text_size(content_font_px())
-                        .line_height(relative(1.6))
+                        .line_height(relative(1.5))
                         .into_any_element()
                 }
             }

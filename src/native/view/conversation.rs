@@ -49,7 +49,10 @@ impl Shell {
             .min_h_0()
             .flex()
             .flex_col()
-            .pt_4()
+            // Web `.chat` padding-top is 22px; the inline + bottom padding
+            // is applied per-row so the centered CONTENT_WIDTH column lines
+            // up with the composer.
+            .pt(px(22.0))
             .when(can_load_older, |conversation| {
                 conversation.child(
                     div()
