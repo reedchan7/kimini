@@ -84,7 +84,7 @@ impl Shell {
                     .child(
                         div()
                             .min_w_0()
-                            .text_size(font_px(13.0))
+                            .text_size(ui_font_px())
                             .line_clamp(1)
                             .child(title),
                     )
@@ -114,9 +114,18 @@ impl Shell {
             let menu_title = title.clone();
             let created_at = created_at_label(&session.created_at);
             let strings = self.strings.native;
-            row.cursor_pointer()
+            let row_group = format!("session-row-{}", session.position);
+            let actions_group = row_group.clone();
+            let time_label = relative_time(
+                &session.updated_at,
+                self.strings.native.session_just_now,
+            );
+            row.w_full()
+                .group(row_group)
+                .cursor_pointer()
                 .child(
                     div()
+                        .w_full()
                         .flex()
                         .items_center()
                         .gap_1()
@@ -173,7 +182,7 @@ impl Shell {
                                     div()
                                         .min_w_0()
                                         .flex_1()
-                                        .text_size(font_px(12.0))
+                                        .text_size(ui_font_px())
                                         .font_weight(if selected {
                                             gpui::FontWeight::MEDIUM
                                         } else {
@@ -183,116 +192,158 @@ impl Shell {
                                         .line_clamp(1)
                                         .child(title.clone())
                                         .into_any_element()
-                                })
-                                .child(
-                                    div()
-                                        .min_w(px(26.0))
-                                        .flex_none()
-                                        .text_size(font_px(10.0))
-                                        .text_color(theme_rgb(TEXT_MUTED))
-                                        .text_right()
-                                        .child(relative_time(
-                                            &session.updated_at,
-                                            self.strings.native.session_just_now,
-                                        )),
-                                ),
+                                }),
                         )
                         .when(!renaming, |row| {
                             row.child(
-                                Button::new(("session-actions", session.position))
-                                    .xsmall()
-                                    .ghost()
-                                    .icon(IconName::Ellipsis)
-                                    .tooltip(self.strings.native.session_actions)
-                                    .dropdown_menu(move |menu, window, _| {
-                                        let copy_id = menu_session_id.clone();
-                                        let rename_id = menu_session_id.clone();
-                                        let rename_title = menu_title.clone();
-                                        let fork_id = menu_session_id.clone();
-                                        let export_id = menu_session_id.clone();
-                                        let archive_id = menu_session_id.clone();
-                                        let rename = window.listener_for(
-                                            &shell,
-                                            move |this, _, window, cx| {
-                                                this.begin_session_rename_for(
-                                                    rename_id.clone(),
-                                                    rename_title.clone(),
-                                                    window,
-                                                    cx,
-                                                )
-                                            },
-                                        );
-                                        let fork =
-                                            window.listener_for(&shell, move |this, _, _, cx| {
-                                                this.fork_session(fork_id.clone(), cx)
-                                            });
-                                        let export =
-                                            window.listener_for(&shell, move |this, _, _, cx| {
-                                                this.export_session(export_id.clone(), cx)
-                                            });
-                                        let archive = window.listener_for(
-                                            &shell,
-                                            move |this, _, window, cx| {
-                                                this.confirm_archive_session(
-                                                    archive_id.clone(),
-                                                    window,
-                                                    cx,
-                                                )
-                                            },
-                                        );
-                                        menu.min_w(px(220.0))
-                                            .item(
-                                                PopupMenuItem::new(strings.copy_session_id)
-                                                    .icon(IconName::Copy)
-                                                    .on_click(move |_, _, cx| {
-                                                        cx.write_to_clipboard(
-                                                            ClipboardItem::new_string(
-                                                                copy_id.clone(),
-                                                            ),
-                                                        )
-                                                    }),
-                                            )
-                                            .separator()
-                                            .item(
-                                                PopupMenuItem::new(strings.rename_session)
-                                                    .icon(
-                                                        Icon::default()
-                                                            .path(SESSION_RENAME_ICON_PATH),
-                                                    )
-                                                    .on_click(rename),
-                                            )
-                                            .item(
-                                                PopupMenuItem::new(strings.fork)
-                                                    .icon(
-                                                        Icon::default()
-                                                            .path(SESSION_FORK_ICON_PATH),
-                                                    )
-                                                    .on_click(fork),
-                                            )
-                                            .item(
-                                                PopupMenuItem::new(strings.export_session)
-                                                    .icon(
-                                                        Icon::default()
-                                                            .path(SESSION_EXPORT_ICON_PATH),
-                                                    )
-                                                    .on_click(export),
-                                            )
-                                            .item(
-                                                PopupMenuItem::element(move |_, _| {
-                                                    div()
-                                                        .text_color(theme_rgb(ERROR))
-                                                        .child(strings.archive)
+                                // Shared trailing slot: relative time by default, row actions
+                                // on hover / when selected. Keeps both on the far right.
+                                div()
+                                    .relative()
+                                    .flex_none()
+                                    .h(px(20.0))
+                                    .min_w(px(28.0))
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .inset_0()
+                                            .flex()
+                                            .items_center()
+                                            .justify_end()
+                                            .text_size(font_px(10.0))
+                                            .text_color(theme_rgb(TEXT_MUTED))
+                                            .when(selected, |time| time.invisible())
+                                            .when(!selected, |time| {
+                                                time.group_hover(actions_group.clone(), |style| {
+                                                    style.invisible()
                                                 })
-                                                .icon(
-                                                    Icon::default()
-                                                        .path(SESSION_ARCHIVE_ICON_PATH)
-                                                        .text_color(theme_rgb(ERROR)),
+                                            })
+                                            .child(time_label),
+                                    )
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .inset_0()
+                                            .flex()
+                                            .items_center()
+                                            .justify_end()
+                                            .when(!selected, |actions| {
+                                                actions.invisible().group_hover(
+                                                    actions_group,
+                                                    |style| style.visible(),
                                                 )
-                                                .on_click(archive),
-                                            )
-                                            .separator()
-                                            .label(created_at.clone())
-                                    }),
+                                            })
+                                            .child(
+                                                sidebar_icon_button(
+                                                    ("session-actions", session.position),
+                                                    IconName::Ellipsis,
+                                                    self.strings.native.session_actions,
+                                                )
+                                                .dropdown_menu(move |menu, window, _| {
+                                                    let copy_id = menu_session_id.clone();
+                                                    let rename_id = menu_session_id.clone();
+                                                    let rename_title = menu_title.clone();
+                                                    let fork_id = menu_session_id.clone();
+                                                    let export_id = menu_session_id.clone();
+                                                    let archive_id = menu_session_id.clone();
+                                                    let rename = window.listener_for(
+                                                        &shell,
+                                                        move |this, _, window, cx| {
+                                                            this.begin_session_rename_for(
+                                                                rename_id.clone(),
+                                                                rename_title.clone(),
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        },
+                                                    );
+                                                    let fork = window.listener_for(
+                                                        &shell,
+                                                        move |this, _, _, cx| {
+                                                            this.fork_session(fork_id.clone(), cx)
+                                                        },
+                                                    );
+                                                    let export = window.listener_for(
+                                                        &shell,
+                                                        move |this, _, _, cx| {
+                                                            this.export_session(
+                                                                export_id.clone(),
+                                                                cx,
+                                                            )
+                                                        },
+                                                    );
+                                                    let archive = window.listener_for(
+                                                        &shell,
+                                                        move |this, _, window, cx| {
+                                                            this.confirm_archive_session(
+                                                                archive_id.clone(),
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        },
+                                                    );
+                                                    menu.min_w(px(220.0))
+                                                        .item(
+                                                            PopupMenuItem::new(
+                                                                strings.copy_session_id,
+                                                            )
+                                                            .icon(IconName::Copy)
+                                                            .on_click(move |_, _, cx| {
+                                                                cx.write_to_clipboard(
+                                                                    ClipboardItem::new_string(
+                                                                        copy_id.clone(),
+                                                                    ),
+                                                                )
+                                                            }),
+                                                        )
+                                                        .separator()
+                                                        .item(
+                                                            PopupMenuItem::new(
+                                                                strings.rename_session,
+                                                            )
+                                                            .icon(
+                                                                Icon::default()
+                                                                    .path(SESSION_RENAME_ICON_PATH),
+                                                            )
+                                                            .on_click(rename),
+                                                        )
+                                                        .item(
+                                                            PopupMenuItem::new(strings.fork).icon(
+                                                                Icon::default()
+                                                                    .path(SESSION_FORK_ICON_PATH),
+                                                            )
+                                                            .on_click(fork),
+                                                        )
+                                                        .item(
+                                                            PopupMenuItem::new(
+                                                                strings.export_session,
+                                                            )
+                                                            .icon(
+                                                                Icon::default()
+                                                                    .path(SESSION_EXPORT_ICON_PATH),
+                                                            )
+                                                            .on_click(export),
+                                                        )
+                                                        .item(
+                                                            PopupMenuItem::element(move |_, _| {
+                                                                div()
+                                                                    .text_color(theme_rgb(ERROR))
+                                                                    .child(strings.archive)
+                                                            })
+                                                            .icon(
+                                                                Icon::default()
+                                                                    .path(
+                                                                        SESSION_ARCHIVE_ICON_PATH,
+                                                                    )
+                                                                    .text_color(theme_rgb(ERROR)),
+                                                            )
+                                                            .on_click(archive),
+                                                        )
+                                                        .separator()
+                                                        .label(created_at.clone())
+                                                }),
+                                            ),
+                                    ),
                             )
                         }),
                 )
@@ -322,23 +373,28 @@ impl Shell {
         let menu_workspace_id = workspace_key.clone();
         let menu_label = label.clone();
         let strings = self.strings.native;
+        let row_group = format!("workspace-row-{index}");
+        let actions_group = row_group.clone();
         div()
             .id(("workspace-heading", index))
             .role(Role::ListItem)
+            .group(row_group)
+            .relative()
+            .w_full()
             .h(px(36.0))
             .px_2()
             .flex()
             .items_center()
             .gap_1()
             .rounded_md()
-            .text_size(font_px(11.0))
+            .text_size(caption_font_px())
             .font_semibold()
             .text_color(theme_rgb(TEXT_SECONDARY))
             .hover(|row| row.bg(theme_rgb(SURFACE_ACTIVE)))
             .child(
                 div()
                     .id(("toggle-workspace", index))
-                    .flex_1()
+                    .w_full()
                     .min_w_0()
                     .focusable()
                     .tab_stop(true)
@@ -349,6 +405,7 @@ impl Shell {
                     .flex()
                     .items_center()
                     .gap_1()
+                    .pr(px(48.0))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.session_list.toggle_workspace(&toggle_key);
                         cx.notify();
@@ -370,66 +427,92 @@ impl Shell {
                                 .text_color(theme_rgb(TEXT_MUTED)),
                             ),
                     )
-                    .child(div().min_w_0().line_clamp(1).child(label.clone())),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .line_clamp(1)
+                            .child(label.clone()),
+                    ),
             )
             .child(
-                Button::new(("workspace-actions", index))
-                    .xsmall()
-                    .ghost()
-                    .icon(IconName::Ellipsis)
-                    .tooltip(self.strings.native.workspace_actions)
-                    .dropdown_menu(move |menu, window, _| {
-                        let copy_root = menu_root.clone();
-                        let rename_id = menu_workspace_id.clone();
-                        let rename_label = menu_label.clone();
-                        let remove_id = menu_workspace_id.clone();
-                        let remove_label = menu_label.clone();
-                        let rename = window.listener_for(&shell, move |this, _, window, cx| {
-                            this.begin_workspace_rename(
-                                rename_id.clone(),
-                                rename_label.clone(),
+                // Far-right action cluster: same placement as session rows.
+                div()
+                    .absolute()
+                    .right(px(4.0))
+                    .top_0()
+                    .bottom_0()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap_0()
+                    .invisible()
+                    .group_hover(actions_group, |style| style.visible())
+                    .child(
+                        sidebar_icon_button(
+                            ("workspace-actions", index),
+                            IconName::Ellipsis,
+                            self.strings.native.workspace_actions,
+                        )
+                        .dropdown_menu(move |menu, window, _| {
+                            let copy_root = menu_root.clone();
+                            let rename_id = menu_workspace_id.clone();
+                            let rename_label = menu_label.clone();
+                            let remove_id = menu_workspace_id.clone();
+                            let remove_label = menu_label.clone();
+                            let rename = window.listener_for(&shell, move |this, _, window, cx| {
+                                this.begin_workspace_rename(
+                                    rename_id.clone(),
+                                    rename_label.clone(),
+                                    window,
+                                    cx,
+                                )
+                            });
+                            let remove = window.listener_for(&shell, move |this, _, window, cx| {
+                                this.confirm_remove_workspace(
+                                    remove_id.clone(),
+                                    remove_label.clone(),
+                                    window,
+                                    cx,
+                                )
+                            });
+                            menu.min_w(px(210.0))
+                                .item(PopupMenuItem::new(strings.copy_path).on_click(
+                                    move |_, _, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            copy_root.clone(),
+                                        ))
+                                    },
+                                ))
+                                .separator()
+                                .item(
+                                    PopupMenuItem::new(strings.rename_workspace).on_click(rename),
+                                )
+                                .separator()
+                                .item(
+                                    PopupMenuItem::element(move |_, _| {
+                                        div()
+                                            .text_color(theme_rgb(ERROR))
+                                            .child(strings.remove_workspace)
+                                    })
+                                    .on_click(remove),
+                                )
+                        }),
+                    )
+                    .child(
+                        sidebar_icon_button(
+                            ("new-session-in-workspace", index),
+                            IconName::Plus,
+                            self.strings.native.new_session_in_workspace,
+                        )
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.begin_new_session_in_workspace(
+                                new_session_root.clone(),
                                 window,
                                 cx,
                             )
-                        });
-                        let remove = window.listener_for(&shell, move |this, _, window, cx| {
-                            this.confirm_remove_workspace(
-                                remove_id.clone(),
-                                remove_label.clone(),
-                                window,
-                                cx,
-                            )
-                        });
-                        menu.min_w(px(210.0))
-                            .item(PopupMenuItem::new(strings.copy_path).on_click(
-                                move |_, _, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        copy_root.clone(),
-                                    ))
-                                },
-                            ))
-                            .separator()
-                            .item(PopupMenuItem::new(strings.rename_workspace).on_click(rename))
-                            .separator()
-                            .item(
-                                PopupMenuItem::element(move |_, _| {
-                                    div()
-                                        .text_color(theme_rgb(ERROR))
-                                        .child(strings.remove_workspace)
-                                })
-                                .on_click(remove),
-                            )
-                    }),
-            )
-            .child(
-                Button::new(("new-session-in-workspace", index))
-                    .xsmall()
-                    .ghost()
-                    .icon(IconName::Plus)
-                    .tooltip(self.strings.native.new_session_in_workspace)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.begin_new_session_in_workspace(new_session_root.clone(), window, cx)
-                    })),
+                        })),
+                    ),
             )
             .into_any_element()
     }
@@ -501,4 +584,17 @@ impl Shell {
             .child(label)
             .into_any_element()
     }
+}
+
+fn sidebar_icon_button(
+    id: impl Into<gpui::ElementId>,
+    icon: IconName,
+    tooltip: impl Into<gpui::SharedString>,
+) -> Button {
+    Button::new(id)
+        .xsmall()
+        .ghost()
+        .icon(icon)
+        .text_color(theme_rgb(TEXT_MUTED))
+        .tooltip(tooltip)
 }

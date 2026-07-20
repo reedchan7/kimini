@@ -120,7 +120,7 @@ impl Shell {
                     .child(img(APP_ICON_PATH).size(px(24.0)).rounded_md())
                     .child(
                         div()
-                            .text_size(font_px(13.0))
+                            .text_size(body_font_px())
                             .font_semibold()
                             .child("Kimini"),
                     ),
@@ -287,7 +287,7 @@ fn sidebar_action(id: &'static str, label: &'static str) -> gpui::Stateful<gpui:
         .items_center()
         .gap_2()
         .rounded_md()
-        .text_size(font_px(13.0))
+        .text_size(body_font_px())
         .text_color(theme_rgb(TEXT_SECONDARY))
         .hover(|item| {
             item.bg(theme_rgb(SURFACE_ACTIVE))

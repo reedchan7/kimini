@@ -177,7 +177,7 @@ fn empty_conversation(strings: crate::i18n::NativeStrings) -> impl IntoElement {
         )
         .child(
             div()
-                .text_size(font_px(13.0))
+                .text_size(body_font_px())
                 .text_color(theme_rgb(TEXT_MUTED))
                 .child(strings.start_session_hint),
         )

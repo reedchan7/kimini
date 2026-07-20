@@ -111,9 +111,29 @@ pub(super) fn theme_rgb(color: impl ThemeColorValue) -> Rgba {
     gpui::rgb(color.resolved())
 }
 
+/// Scale a design-token size against Settings → Font size (default base 14).
+///
+/// `base` is the size at the default 14px setting. Raising Settings to 16
+/// adds +2 to every token so hierarchy stays proportional.
 pub(super) fn font_px(base: f32) -> Pixels {
     let offset = f32::from(current_font_size()) - 14.0;
     px((base + offset).max(8.0))
+}
+
+/// Primary reading size: chat markdown, side-chat answers, empty-state body.
+/// Matches Settings "Font size" (Codex / Kimi Web UI base of 14px).
+pub(super) fn body_font_px() -> Pixels {
+    font_px(14.0)
+}
+
+/// Default chrome labels: sidebar rows, toolbar title, settings rows.
+pub(super) fn ui_font_px() -> Pixels {
+    font_px(13.0)
+}
+
+/// Secondary chrome: workspace headings, control captions.
+pub(super) fn caption_font_px() -> Pixels {
+    font_px(12.0)
 }
 
 fn resolve_color(color: ColorToken) -> u32 {

@@ -147,14 +147,14 @@ impl Shell {
                     .child(
                         TextView::markdown(("side-chat-user", index), turn.user.clone())
                             .selectable(true)
-                            .text_size(font_px(13.0)),
+                            .text_size(body_font_px()),
                     ),
             )
             .when(!turn.thinking.is_empty(), |item| {
                 item.child(
                     div()
                         .mt_3()
-                        .text_size(font_px(12.0))
+                        .text_size(caption_font_px())
                         .text_color(theme_rgb(TEXT_MUTED))
                         .child(format!(
                             "{}\n{}",
@@ -167,7 +167,7 @@ impl Shell {
                     div().mt_3().child(
                         TextView::markdown(("side-chat-assistant", index), turn.assistant.clone())
                             .selectable(true)
-                            .text_size(font_px(13.0)),
+                            .text_size(body_font_px()),
                     ),
                 )
             })

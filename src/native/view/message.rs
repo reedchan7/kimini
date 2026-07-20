@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use gpui::{Animation, AnimationExt, AnyElement, Context, Role, div, prelude::*, px};
+use gpui::{
+    Animation, AnimationExt, AnyElement, Context, Role, div, prelude::*, px, relative,
+};
 use gpui_component::{StyledExt, text::TextView};
 
 use crate::protocol::{MessageRole, PromptPart};
@@ -170,7 +172,8 @@ impl Shell {
             TranscriptBlock::Text(text) => {
                 TextView::markdown(("message-markdown", key), text.clone())
                     .selectable(true)
-                    .text_size(font_px(13.0))
+                    .text_size(body_font_px())
+                    .line_height(relative(1.55))
                     .into_any_element()
             }
             TranscriptBlock::Thinking(text) => self.thinking_block(key, text, cx),
@@ -219,10 +222,11 @@ impl Shell {
                     .child(self.strings.native.preview_thinking),
             )
             .child(
-                div().max_h(gpui::px(64.0)).overflow_hidden().child(
+                div().max_h(gpui::px(72.0)).overflow_hidden().child(
                     TextView::markdown(("thinking-markdown", key), body.to_owned())
                         .selectable(true)
-                        .text_size(font_px(13.0))
+                        .text_size(body_font_px())
+                        .line_height(relative(1.5))
                         .text_color(theme_rgb(TEXT_SECONDARY)),
                 ),
             )
@@ -283,7 +287,8 @@ fn semantic_block(label: &str, error: bool, key: usize, body: &str) -> AnyElemen
         .child(
             TextView::markdown(("semantic-markdown", key), body.to_owned())
                 .selectable(true)
-                .text_size(font_px(13.0)),
+                .text_size(body_font_px())
+                .line_height(relative(1.55)),
         )
         .into_any_element()
 }

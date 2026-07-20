@@ -29,13 +29,13 @@ impl Shell {
                     .gap_2()
                     .child(
                         div()
-                            .text_size(font_px(13.0))
+                            .text_size(ui_font_px())
                             .text_color(theme_rgb(TEXT_MUTED))
                             .child(workspace_label(&session.metadata.cwd)),
                     )
                     .child(
                         div()
-                            .text_size(font_px(13.0))
+                            .text_size(ui_font_px())
                             .text_color(theme_rgb(BORDER_STRONG))
                             .child("/"),
                     )
@@ -43,7 +43,7 @@ impl Shell {
                         div()
                             .max_w(px(460.))
                             .line_clamp(1)
-                            .text_size(font_px(13.0))
+                            .text_size(body_font_px())
                             .font_medium()
                             .child(title),
                     ),

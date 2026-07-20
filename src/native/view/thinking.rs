@@ -72,13 +72,13 @@ impl Shell {
                                 TextView::markdown("thinking-preview-content", text.to_owned())
                                     .selectable(true)
                                     .w_full()
-                                    .text_size(font_px(13.0))
+                                    .text_size(body_font_px())
                                     .text_color(theme_rgb(TEXT_SECONDARY)),
                             )
                             .into_any_element()
                     } else {
                         div()
-                            .text_size(font_px(13.0))
+                            .text_size(body_font_px())
                             .text_color(theme_rgb(TEXT_MUTED))
                             .child(self.strings.native.thinking_preview_hint)
                             .into_any_element()
