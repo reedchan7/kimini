@@ -18,6 +18,7 @@ mod shell;
 mod side_chat;
 mod skills;
 mod slash;
+mod streaming;
 mod tasks;
 mod terminal;
 mod theme;

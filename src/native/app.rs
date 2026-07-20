@@ -26,6 +26,7 @@ use super::skills::SkillCatalogState;
 use super::tasks::TaskRosters;
 use super::terminal::{LocalTerminalHost, Terminals};
 use super::theme;
+use super::streaming::Streaming;
 
 #[derive(Debug, Clone)]
 pub(super) enum LoadState {
@@ -170,6 +171,10 @@ pub(super) struct Shell {
     pub(super) models: Vec<ModelCatalogItem>,
     pub(super) auth: AuthState,
     pub(super) transcript: Transcript,
+    /// Incremental markdown state for the active conversation's streaming
+    /// assistant + thinking rows. `None` between turns; recreated the first
+    /// time a delta arrives for a new turn.
+    pub(super) streaming: Option<Streaming>,
     pub(super) session_list: SessionList,
     pub(super) expanded_tools: HashSet<String>,
     pub(super) preview_thinking: Option<String>,
@@ -382,6 +387,7 @@ impl Shell {
             models: Vec::new(),
             auth: AuthState::default(),
             transcript: Transcript::default(),
+            streaming: None,
             session_list: SessionList::default(),
             expanded_tools: HashSet::new(),
             preview_thinking: None,

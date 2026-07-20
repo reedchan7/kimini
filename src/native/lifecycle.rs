@@ -7,6 +7,7 @@ use crate::model::ApplyOutcome;
 
 use super::app::{LoadState, Shell, UtilityPanel};
 use super::bootstrap::{self, Bootstrap, LoadedSession};
+use super::streaming::start_streaming;
 
 impl Shell {
     pub(super) fn start_bootstrap(&mut self, cx: &mut Context<Self>) {
@@ -198,13 +199,24 @@ impl Shell {
                     match kind.as_str() {
                         "assistant.delta"
                         | "event.assistant.delta"
+                        | "thinking.delta"
+                        | "event.thinking.delta"
                         | "turn.started"
                         | "event.turn.started"
                         | "turn.step.started"
                         | "event.turn.step.started"
                         | "turn.step.retrying"
-                        | "event.turn.step.retrying" => self.transcript.sync_stream(&self.model),
-                        "event.message.created" => self.transcript.rebuild(&self.model),
+                        | "event.turn.step.retrying" => {
+                            self.sync_streaming(cx);
+                            self.transcript.sync_stream(&self.model);
+                        }
+                        "event.message.created" => {
+                            // The assistant turn has been promoted to a real
+                            // message: drop the streaming entity so the next
+                            // turn starts from a fresh parse.
+                            self.streaming = None;
+                            self.transcript.rebuild(&self.model);
+                        }
                         _ => {}
                     }
                 }
@@ -255,15 +267,36 @@ impl Shell {
         self.draft_workspace_menu_open = false;
         self.draft_workspace_show_all = false;
         self.renaming_session_id = None;
+        self.streaming = None;
         self.load_snapshot(session_id, cx);
         self.composer
             .update(cx, |input, cx| input.focus(window, cx));
     }
 
     pub(in crate::native) fn reload_active(&mut self, cx: &mut Context<Self>) {
+        // Snapshot boundary reached (turn ended / prompt completed / socket
+        // resync): the journal snapshot now owns the turn's content, so the
+        // streaming entity is stale. Drop it so the next turn starts clean.
+        self.streaming = None;
         if let Some(session) = self.model.active_session() {
             self.load_snapshot(session.id.clone(), cx);
         }
+    }
+
+    /// Diff the active conversation's assistant + thinking snapshots into the
+    /// persistent streaming entities. Creates the pair lazily on the first
+    /// delta of a new turn, and no-ops when the snapshot hasn't changed.
+    pub(super) fn sync_streaming(&mut self, cx: &mut Context<Self>) {
+        let Some(conversation) = self.model.active_conversation() else {
+            return;
+        };
+        let assistant = conversation.assistant_stream.as_deref().unwrap_or("");
+        let thinking = conversation.thinking_stream.as_deref().unwrap_or("");
+        let streaming = self
+            .streaming
+            .get_or_insert_with(|| start_streaming(cx));
+        streaming.sync_assistant(assistant, cx);
+        streaming.sync_thinking(thinking, cx);
     }
 
     pub(super) fn load_snapshot(&mut self, session_id: String, cx: &mut Context<Self>) {

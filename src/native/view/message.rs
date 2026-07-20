@@ -9,6 +9,7 @@ use crate::protocol::{MessageRole, PromptPart};
 
 use super::super::app::Shell;
 use super::super::presentation::{AttachmentKind, TranscriptBlock, TranscriptRow};
+use super::super::streaming::streaming_text_view;
 use super::super::theme::*;
 
 impl Shell {
@@ -41,9 +42,13 @@ impl Shell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let speaker = speaker(row.role, self.strings.native);
-        let blocks = self.render_blocks(index, &row.blocks, cx);
+        let blocks = self.render_blocks(index, &row.blocks, row.streaming, cx);
         let is_user = row.role == MessageRole::User;
         let waiting = row.streaming && row.blocks.is_empty();
+        // Each row owns a centered CONTENT_WIDTH column. The scroll container
+        // is now full pane width (see `conversation`), so wheel events in the
+        // gutters still reach the list while the message column stays aligned
+        // with the composer and 760px reading measure.
         div()
             .id(("message", index))
             .role(Role::Article)
@@ -53,11 +58,14 @@ impl Shell {
                 format!("{speaker}: {}", row.accessible_text())
             })
             .w_full()
+            .flex()
+            .justify_center()
             .px_3()
             .pb_5()
             .child(
                 div()
                     .w_full()
+                    .max_w(px(CONTENT_WIDTH))
                     .flex()
                     .when(is_user, |container| container.justify_end())
                     .child(
@@ -100,6 +108,34 @@ impl Shell {
             .into_any_element()
     }
 
+    /// Blinking caret that mirrors the Web `typewriter-cursor-blink` animation
+    /// while the assistant row is streaming. Rendered as a thin accent bar
+    /// anchored to the baseline of the streaming markdown body. Static when
+    /// the user has reduced motion enabled.
+    fn streaming_caret(&self, key: usize, cx: &Context<Self>) -> AnyElement {
+        const PERIOD: Duration = Duration::from_millis(850);
+        // 1px wide × ~1.15em tall, matching the Web `|` caret.
+        let bar = div()
+            .id(("streaming-caret", key))
+            .role(Role::Image)
+            .aria_label(self.strings.native.waiting_for_response)
+            .w(px(2.0))
+            .h(body_font_px() * 1.15)
+            .rounded_sm()
+            .bg(theme_rgb(ACCENT));
+        if cx.reduce_motion() {
+            return bar.into_any_element();
+        }
+        // Web cursor cycle: 0-49% visible, 50-100% hidden. `delta` runs
+        // 0..1 each period; flip at the midpoint.
+        bar.with_animation(
+            ("streaming-caret-blink", key),
+            Animation::new(PERIOD).repeat(),
+            |bar, delta| bar.opacity(if delta < 0.5 { 1.0 } else { 0.0 }),
+        )
+        .into_any_element()
+    }
+
     fn kimi_waiting_indicator(&self, key: usize, cx: &Context<Self>) -> AnyElement {
         const FRAMES: [&str; 8] = ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"];
         let moon = div()
@@ -129,6 +165,7 @@ impl Shell {
         &self,
         message_index: usize,
         blocks: &[TranscriptBlock],
+        streaming: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let mut rendered = Vec::new();
@@ -153,7 +190,7 @@ impl Shell {
                 ));
                 continue;
             }
-            rendered.push(self.render_block(message_index, index, &blocks[index], cx));
+            rendered.push(self.render_block(message_index, index, &blocks[index], streaming, cx));
             index += 1;
         }
         rendered
@@ -164,19 +201,43 @@ impl Shell {
         index: usize,
         block_index: usize,
         block: &TranscriptBlock,
+        streaming: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let key = index.saturating_mul(10_000).saturating_add(block_index);
         let strings = self.strings.native;
         match block {
             TranscriptBlock::Text(text) => {
-                TextView::markdown(("message-markdown", key), text.clone())
-                    .selectable(true)
-                    .text_size(body_font_px())
-                    .line_height(relative(1.55))
-                    .into_any_element()
+                // Streaming rows render into a long-lived TextViewState so the
+                // parsed markdown AST survives across deltas and the parse
+                // pipeline can append new suffixes off-thread. Non-streaming
+                // rows keep the stateless `TextView::markdown` form.
+                if streaming
+                    && let Some(entity) = self
+                        .streaming
+                        .as_ref()
+                        .map(|state| state.assistant_entity().clone())
+                {
+                    div()
+                        .flex()
+                        .items_end()
+                        .gap_1()
+                        .child(
+                            streaming_text_view(&entity)
+                                .text_size(body_font_px())
+                                .line_height(relative(1.55)),
+                        )
+                        .child(self.streaming_caret(key, cx))
+                        .into_any_element()
+                } else {
+                    TextView::markdown(("message-markdown", key), text.clone())
+                        .selectable(true)
+                        .text_size(body_font_px())
+                        .line_height(relative(1.55))
+                        .into_any_element()
+                }
             }
-            TranscriptBlock::Thinking(text) => self.thinking_block(key, text, cx),
+            TranscriptBlock::Thinking(text) => self.thinking_block(key, text, streaming, cx),
             TranscriptBlock::Tool(tool) => self.tool_card(key, tool, cx),
             TranscriptBlock::Attachment { kind, name, detail } => attachment_block(
                 match kind {
@@ -191,8 +252,33 @@ impl Shell {
         }
     }
 
-    fn thinking_block(&self, key: usize, body: &str, cx: &mut Context<Self>) -> AnyElement {
+    fn thinking_block(
+        &self,
+        key: usize,
+        body: &str,
+        streaming: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let text = body.to_owned();
+        let trace_view = if streaming
+            && let Some(entity) = self
+                .streaming
+                .as_ref()
+                .map(|state| state.thinking_entity().clone())
+        {
+            streaming_text_view(&entity)
+                .text_size(body_font_px())
+                .line_height(relative(1.5))
+                .text_color(theme_rgb(TEXT_SECONDARY))
+                .into_any_element()
+        } else {
+            TextView::markdown(("thinking-markdown", key), body.to_owned())
+                .selectable(true)
+                .text_size(body_font_px())
+                .line_height(relative(1.5))
+                .text_color(theme_rgb(TEXT_SECONDARY))
+                .into_any_element()
+        };
         div()
             .id(("thinking-trace", key))
             .mt_2()
@@ -221,15 +307,7 @@ impl Shell {
                     .child(self.strings.native.thinking)
                     .child(self.strings.native.preview_thinking),
             )
-            .child(
-                div().max_h(gpui::px(72.0)).overflow_hidden().child(
-                    TextView::markdown(("thinking-markdown", key), body.to_owned())
-                        .selectable(true)
-                        .text_size(body_font_px())
-                        .line_height(relative(1.5))
-                        .text_color(theme_rgb(TEXT_SECONDARY)),
-                ),
-            )
+            .child(div().max_h(gpui::px(72.0)).overflow_hidden().child(trace_view))
             .into_any_element()
     }
 }

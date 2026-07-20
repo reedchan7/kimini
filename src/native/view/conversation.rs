@@ -35,12 +35,15 @@ impl Shell {
             .conversation_outline
             .then(|| conversation_outline_items(&self.transcript.rows))
             .filter(|items| items.len() > 1);
+        // The scroll container takes the full chat pane width so wheel events
+        // landing in the side gutters (outside the 760px content column) still
+        // scroll the list. Per-row content is capped to CONTENT_WIDTH inside
+        // `render_message_row`, so the visual layout is unchanged.
         div()
             .id("conversation-document")
             .role(Role::Document)
             .aria_label(self.strings.native.conversation)
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
             .relative()
             .flex_1()
             .min_h_0()
@@ -49,27 +52,34 @@ impl Shell {
             .pt_4()
             .when(can_load_older, |conversation| {
                 conversation.child(
-                    div().flex_none().flex().justify_center().pb_3().child(
-                        div()
-                            .id("load-older-messages")
-                            .focusable()
-                            .tab_stop(true)
-                            .role(Role::Button)
-                            .aria_label(self.strings.native.load_earlier)
-                            .cursor_pointer()
-                            .rounded_md()
-                            .px_3()
-                            .py_1()
-                            .text_size(font_px(12.0))
-                            .text_color(theme_rgb(TEXT_MUTED))
-                            .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
-                            .on_click(cx.listener(|this, _, _, cx| this.load_older_messages(cx)))
-                            .child(if self.history_loading {
-                                self.strings.native.loading_earlier
-                            } else {
-                                self.strings.native.load_earlier
-                            }),
-                    ),
+                    div()
+                        .flex_none()
+                        .flex()
+                        .justify_center()
+                        .pb_3()
+                        .child(
+                            div()
+                                .id("load-older-messages")
+                                .focusable()
+                                .tab_stop(true)
+                                .role(Role::Button)
+                                .aria_label(self.strings.native.load_earlier)
+                                .cursor_pointer()
+                                .rounded_md()
+                                .px_3()
+                                .py_1()
+                                .text_size(font_px(12.0))
+                                .text_color(theme_rgb(TEXT_MUTED))
+                                .hover(|item| item.bg(theme_rgb(SURFACE_ACTIVE)))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.load_older_messages(cx)
+                                }))
+                                .child(if self.history_loading {
+                                    self.strings.native.loading_earlier
+                                } else {
+                                    self.strings.native.load_earlier
+                                }),
+                        ),
                 )
             })
             .child(content)
