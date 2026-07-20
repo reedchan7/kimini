@@ -44,9 +44,10 @@ ARCH      ?=
 # Extra flags for publish-release (e.g. PUBLISH_FLAGS=--dry-run)
 PUBLISH_FLAGS ?=
 
-.PHONY: help build build-web release release-web run run-web run-release \
-        check test coverage-core fmt fmt-check clippy lint clean clean-dist size \
-        install uninstall doctor \
+.PHONY: help build build-web build-all release release-web release-all \
+        run run-web run-release \
+        check test coverage-core fmt fmt-check clippy lint clean clean-dist clean-all size \
+        install install-all uninstall doctor \
         app app-native app-web apps dmg dmg-web zip zip-web package-all \
         package-linux package-linux-native package-windows publish-release \
         publish-release-all sparkle install-app install-web-app \
@@ -78,20 +79,22 @@ help: ## Show this help
 	    next; \
 	  } \
 	  /^[a-zA-Z0-9_.-]+:.*?##/ { \
-	    printf "    $(C_GREEN)%-16s$(C_RESET) %s\n", $$1, $$2; \
+	    printf "    $(C_GREEN)%-22s$(C_RESET) %s\n", $$1, $$2; \
 	  }' $(MAKEFILE_LIST)
 	@printf '\n  $(C_BOLD)Variables:$(C_RESET)\n'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'URL' 'Kimini Web daemon URL (optional)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'BROWSER_URL' 'Native human-browser start URL (optional)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'CARGO' 'Cargo binary (default: cargo)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'INSTALL_DIR' 'App install path (default: ~/Applications)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'TARGET' 'cargo target triple (optional)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'ARCH' 'Artifact arch label aarch64|x86_64 (optional)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'PUBLISH_FLAGS' 'Extra flags for publish-release (e.g. --dry-run)'
-	@printf '    $(C_YELLOW)%-16s$(C_RESET) %s\n' 'NO_COLOR' 'Set to disable ANSI colors in help'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'URL' 'Kimini Web daemon URL (optional)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'BROWSER_URL' 'Native human-browser start URL (optional)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'CARGO' 'Cargo binary (default: cargo)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'INSTALL_DIR' 'App install path (default: ~/Applications)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'TARGET' 'cargo target triple (optional)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'ARCH' 'Artifact arch label aarch64|x86_64 (optional)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'PUBLISH_FLAGS' 'Extra flags for publish-release (e.g. --dry-run)'
+	@printf '    $(C_YELLOW)%-22s$(C_RESET) %s\n' 'NO_COLOR' 'Set to disable ANSI colors in help'
 	@printf '\n  $(C_DIM)Examples:$(C_RESET)\n'
 	@printf '    make run BROWSER_URL='"'"'https://example.com'"'"'\n'
 	@printf '    make run-web URL='"'"'http://127.0.0.1:58627/#token=…'"'"'\n'
+	@printf '    make build-all\n'
+	@printf '    make install-all\n'
 	@printf '    make app && make install-app\n'
 	@printf '    make dmg && make zip\n'
 	@printf '    make package-all\n'
@@ -100,6 +103,30 @@ help: ## Show this help
 	@printf '    make publish-release-all\n'
 	@printf '    make publish-release PUBLISH_FLAGS=--dry-run\n'
 	@printf '    make lint\n\n'
+
+# ---------------------------------------------------------------------------
+# All-in-one (batch convenience — see individual groups for finer targets)
+# ---------------------------------------------------------------------------
+##@ All-in-one
+
+build-all: build build-web ## Debug-build native + web
+release-all: release release-web ## Release-build native + web
+apps: app-native app-web ## Build both macOS apps (dist/*.app)
+install-all: install install-app install-web-app ## Install CLI + both .apps
+uninstall-all: uninstall uninstall-app uninstall-web-app ## Remove CLI + both .apps
+package-all: ## Dual-arch DMG + zip for both apps into dist/
+	@test "$$(uname -s)" = "Darwin" || { echo "error: package-all requires macOS"; exit 1; }
+	bash ./$(PACKAGE_SH) --app native --target aarch64-apple-darwin --arch aarch64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app web --target aarch64-apple-darwin --arch aarch64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app native --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+	bash ./$(PACKAGE_SH) --app web --target x86_64-apple-darwin --arch x86_64 --dmg --zip
+	@ls -lh '$(DIST)'/*.dmg '$(DIST)'/*.zip 2>/dev/null || true
+
+publish-release-all: ## Publish macOS + Linux + staged Windows asset matrix
+	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release-all coordinator requires macOS"; exit 1; }
+	bash ./$(PUBLISH_SH) --include-portable $(PUBLISH_FLAGS)
+
+clean-all: clean clean-dist ## cargo clean + remove dist/
 
 # ---------------------------------------------------------------------------
 # Build
@@ -146,8 +173,6 @@ app-web: ## Build legacy dist/Kimini Web.app
 	@test "$$(uname -s)" = "Darwin" || { echo "error: app packaging requires macOS"; exit 1; }
 	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS)
 
-apps: app-native app-web ## Build both macOS apps
-
 dmg: ## Build .app + DMG (Kimini-<ver>-macos-<arch>.dmg)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: dmg packaging requires macOS"; exit 1; }
 	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS) --dmg
@@ -164,21 +189,9 @@ zip-web: ## Build Kimini Web zip archive
 	@test "$$(uname -s)" = "Darwin" || { echo "error: zip packaging requires macOS"; exit 1; }
 	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --zip
 
-package-all: ## Build aarch64 + x86_64 DMG and zip into dist/
-	@test "$$(uname -s)" = "Darwin" || { echo "error: package-all requires macOS"; exit 1; }
-	bash ./$(PACKAGE_SH) --app native --target aarch64-apple-darwin --arch aarch64 --dmg --zip
-	bash ./$(PACKAGE_SH) --app web --target aarch64-apple-darwin --arch aarch64 --dmg --zip
-	bash ./$(PACKAGE_SH) --app native --target x86_64-apple-darwin --arch x86_64 --dmg --zip
-	bash ./$(PACKAGE_SH) --app web --target x86_64-apple-darwin --arch x86_64 --dmg --zip
-	@ls -lh '$(DIST)'/*.dmg '$(DIST)'/*.zip 2>/dev/null || true
-
 publish-release: ## Local dual-arch package + GitHub Release (version from Cargo.toml)
 	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release requires macOS"; exit 1; }
 	bash ./$(PUBLISH_SH) $(PUBLISH_FLAGS)
-
-publish-release-all: ## Publish a strict macOS + Linux + staged Windows asset matrix
-	@test "$$(uname -s)" = "Darwin" || { echo "error: publish-release-all coordinator requires macOS"; exit 1; }
-	bash ./$(PUBLISH_SH) --include-portable $(PUBLISH_FLAGS)
 
 # ---------------------------------------------------------------------------
 # Linux / Windows portable packages
@@ -201,7 +214,7 @@ install-app: ## Package and install .app to INSTALL_DIR (default: ~/Applications
 	bash ./$(PACKAGE_SH) --app native $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
 
 install-web-app: ## Package and install Kimini Web.app
-	@test "$$(uname -s)" = "Darwin" || { echo "error: install-app requires macOS"; exit 1; }
+	@test "$$(uname -s)" = "Darwin" || { echo "error: install-web-app requires macOS"; exit 1; }
 	bash ./$(PACKAGE_SH) --app web $(PACKAGE_FLAGS) --install "$(INSTALL_DIR)"
 
 uninstall-app: ## Remove Kimini.app from INSTALL_DIR (default: ~/Applications)
@@ -219,8 +232,6 @@ uninstall-web-app: ## Remove Kimini Web.app from INSTALL_DIR
 	else \
 	  printf 'not installed: %s\n' "$(INSTALL_DIR)/$(WEB_APP_NAME).app"; \
 	fi
-
-uninstall-all: uninstall uninstall-app uninstall-web-app ## Remove CLI + both apps from install locations
 
 open-app: ## Open native packaged app; BROWSER_URL='…' opens the browser pane
 	@test "$$(uname -s)" = "Darwin" || { echo "error: open-app requires macOS"; exit 1; }
