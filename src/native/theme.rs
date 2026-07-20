@@ -1,5 +1,4 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::time::Duration;
 
 use gpui::{App, Pixels, Rgba, WindowAppearance, px};
 use gpui_component::{Theme, ThemeMode};
@@ -26,8 +25,8 @@ pub(super) enum ColorToken {
     Error,
     ErrorSoft,
     ErrorSoftActive,
-    // --- Web design-token additions (stage 0). Pure additive: existing
-    // surfaces keep their values; these fill gaps the reference CSS exposes. ---
+    // --- Web design-token additions. Pure additive: existing surfaces keep
+    // their values; these fill gaps the reference CSS exposes. ---
     /// `--color-surface-raised`: pure white (light) / #1c2128 (dark). Used by
     /// elevated cards, popovers, code-block headers.
     SurfaceRaised,
@@ -39,31 +38,11 @@ pub(super) enum ColorToken {
     TextFaint,
     /// `--color-accent-hover`: #0f6fe0 (light) / #79b8ff (dark).
     AccentHover,
-    /// `--color-accent-bd`: #cfe6ff (light) / rgba(88,166,255,.28) (dark, 28%).
-    /// Used for accent-tinted borders (user bubble, accent chip, focused card).
-    AccentBorder,
-    /// `--color-selected`: 8% black (light) / 8% white (dark). Selection wash
-    /// for sidebar rows, list items.
-    Selected,
-    /// `--color-hover`: 5% black (light) / 5% white (dark). Hover wash for
-    /// sidebar rows, buttons, list items.
-    Hover,
     /// `--color-done`: #8250df (light) / #a371f7 (dark). PR-merged, completed
     /// non-success states.
     Done,
     /// `--color-text-on-accent`: foreground on top of `Accent` fills.
     TextOnAccent,
-    /// `--color-success-soft`: #e7f6ee (light) / 14% green (dark).
-    SuccessSoft,
-    /// `--color-success-bd`: #bfe3cc (light) / 28% green (dark).
-    SuccessBorder,
-    /// `--color-warning-soft`: #fbf1e0 (light) / 14% amber (dark).
-    WarningSoft,
-    /// `--color-warning-bd`: #f0d9b8 (light) / 28% amber (dark).
-    WarningBorder,
-    /// `--color-danger-bd`: #f0cccc (light) / 28% red (dark). Pairs with the
-    /// existing `ErrorSoft` to complete the danger trio.
-    DangerBorder,
 }
 
 pub(super) const CANVAS: ColorToken = ColorToken::Canvas;
@@ -88,16 +67,8 @@ pub(super) const SURFACE_RAISED: ColorToken = ColorToken::SurfaceRaised;
 pub(super) const SURFACE_SUNKEN: ColorToken = ColorToken::SurfaceSunken;
 pub(super) const TEXT_FAINT: ColorToken = ColorToken::TextFaint;
 pub(super) const ACCENT_HOVER: ColorToken = ColorToken::AccentHover;
-pub(super) const ACCENT_BORDER: ColorToken = ColorToken::AccentBorder;
-pub(super) const SELECTED: ColorToken = ColorToken::Selected;
-pub(super) const HOVER: ColorToken = ColorToken::Hover;
 pub(super) const DONE: ColorToken = ColorToken::Done;
 pub(super) const TEXT_ON_ACCENT: ColorToken = ColorToken::TextOnAccent;
-pub(super) const SUCCESS_SOFT: ColorToken = ColorToken::SuccessSoft;
-pub(super) const SUCCESS_BORDER: ColorToken = ColorToken::SuccessBorder;
-pub(super) const WARNING_SOFT: ColorToken = ColorToken::WarningSoft;
-pub(super) const WARNING_BORDER: ColorToken = ColorToken::WarningBorder;
-pub(super) const DANGER_BORDER: ColorToken = ColorToken::DangerBorder;
 
 static DARK_MODE: AtomicBool = AtomicBool::new(false);
 static MONO_ACCENT: AtomicBool = AtomicBool::new(false);
@@ -162,72 +133,6 @@ impl ThemeColorValue for u32 {
 
 pub(super) fn theme_rgb(color: impl ThemeColorValue) -> Rgba {
     gpui::rgb(color.resolved())
-}
-
-/// Resolve a token to a full `0xRRGGBBAA` value (alpha in the low byte).
-///
-/// Use for tokens whose reference values carry alpha — `AccentBorder`,
-/// `Selected`, `Hover`, and the dark-mode soft/-bd pairs. For opaque tokens
-/// `theme_rgb` remains the right call.
-pub(super) fn theme_rgba(color: ColorToken) -> Rgba {
-    gpui::rgba(resolve_color_with_alpha(color))
-}
-
-/// `rgba(r, g, b, alpha)` where alpha is 0..=255. Packs to `0xRRGGBBAA`.
-const fn rgba_u32(rgb: u32, alpha: u8) -> u32 {
-    (rgb << 8) | (alpha as u32)
-}
-
-fn resolve_color_with_alpha(color: ColorToken) -> u32 {
-    let dark = is_dark();
-    let mono = MONO_ACCENT.load(Ordering::Relaxed);
-    match color {
-        ColorToken::AccentBorder => match (dark, mono) {
-            (false, _) => rgba_u32(0xcfe6ff, 0xff),
-            (true, false) => rgba_u32(0x58a6ff, 0x47), // 28%
-            (true, true) => rgba_u32(0x3d444d, 0xff),
-        },
-        ColorToken::Selected => {
-            let alpha: u8 = 0x14; // 8% — #00000014 (light) / #ffffff14 (dark)
-            if dark {
-                rgba_u32(0xffffff, alpha)
-            } else {
-                rgba_u32(0x000000, alpha)
-            }
-        }
-        ColorToken::Hover => {
-            let alpha: u8 = 0x0d; // 5% — #0000000d (light) / #ffffff0d (dark)
-            if dark {
-                rgba_u32(0xffffff, alpha)
-            } else {
-                rgba_u32(0x000000, alpha)
-            }
-        }
-        ColorToken::SuccessSoft => match dark {
-            false => rgba_u32(0xe7f6ee, 0xff),
-            true => rgba_u32(0x3fb950, 0x24), // 14%
-        },
-        ColorToken::SuccessBorder => match dark {
-            false => rgba_u32(0xbfe3cc, 0xff),
-            true => rgba_u32(0x3fb950, 0x47), // 28%
-        },
-        ColorToken::WarningSoft => match dark {
-            false => rgba_u32(0xfbf1e0, 0xff),
-            true => rgba_u32(0xd29922, 0x24),
-        },
-        ColorToken::WarningBorder => match dark {
-            false => rgba_u32(0xf0d9b8, 0xff),
-            true => rgba_u32(0xd29922, 0x47),
-        },
-        ColorToken::DangerBorder => match dark {
-            false => rgba_u32(0xf0cccc, 0xff),
-            true => rgba_u32(0xf85149, 0x47),
-        },
-        _ => {
-            // Fallback: opaque tokens use the 0RGB path; lift alpha to 0xff.
-            resolve_color_for(color, dark, mono) << 8 | 0xff
-        }
-    }
 }
 
 /// Scale a design-token size against Settings → Font size (default base 14).
@@ -319,19 +224,6 @@ fn resolve_color_for(color: ColorToken, dark: bool, mono: bool) -> u32 {
         (true, ERROR_SOFT) => 0x382022,
         (true, ERROR_SOFT_ACTIVE) => 0x4a2424,
         (_, ACCENT | ACCENT_SOFT) => unreachable!("accent tokens return above"),
-        (
-            _,
-            ColorToken::AccentBorder
-            | ColorToken::Selected
-            | ColorToken::Hover
-            | ColorToken::SuccessSoft
-            | ColorToken::SuccessBorder
-            | ColorToken::WarningSoft
-            | ColorToken::WarningBorder
-            | ColorToken::DangerBorder,
-        ) => unreachable!(
-            "alpha tokens return from resolve_color_with_alpha; use theme_rgba"
-        ),
     }
 }
 
@@ -342,60 +234,6 @@ pub(super) const TERMINAL_PANEL_WIDTH: f32 = 520.0;
 pub(super) const FILE_PANEL_WIDTH: f32 = 440.0;
 pub(super) const CONTENT_WIDTH: f32 = 760.0;
 pub(super) const HEADER_HEIGHT: f32 = 48.0;
-
-// --- Reference: Kimi Code Web `--text-xs/sm/base/lg/xl/2xl` ladder. ---
-// Stage 0 introduces these named helpers so later stages can swap off the
-// ad-hoc `font_px(12.0)` / `ui_font_px()` calls without changing behaviour
-// today. `body_font_px` / `ui_font_px` / `caption_font_px` stay as-is.
-pub(super) const TEXT_XS_BASE: f32 = 12.0;
-pub(super) const TEXT_SM_BASE: f32 = 13.0;
-pub(super) const TEXT_BASE_BASE: f32 = 14.0;
-pub(super) const TEXT_LG_BASE: f32 = 16.0;
-pub(super) const TEXT_XL_BASE: f32 = 18.0;
-pub(super) const TEXT_2XL_BASE: f32 = 22.0;
-
-/// `--text-xs` (12px). Captions, kbd chips, code-header labels.
-pub(super) fn text_xs_font_px() -> Pixels {
-    font_px(TEXT_XS_BASE)
-}
-/// `--text-sm` (13px). Secondary chrome, sidebar rows, toolbar sub-line.
-pub(super) fn text_sm_font_px() -> Pixels {
-    font_px(TEXT_SM_BASE)
-}
-/// `--text-base` (14px). Primary chrome.
-pub(super) fn text_base_font_px() -> Pixels {
-    font_px(TEXT_BASE_BASE)
-}
-/// `--text-lg` (16px). Assistant body on small viewports, user-bubble body
-/// minimum (Web clamps to `max(16px, ui-font-size-xl)`).
-pub(super) fn text_lg_font_px() -> Pixels {
-    font_px(TEXT_LG_BASE)
-}
-/// `--text-xl` (18px). Empty-state headings.
-pub(super) fn text_xl_font_px() -> Pixels {
-    font_px(TEXT_XL_BASE)
-}
-
-// --- Reference: chat spacing tokens (`--chat-turn/block/section-gap`). ---
-/// `--chat-turn-gap: 16px` — gap between user-turn and assistant-turn roots.
-pub(super) const CHAT_TURN_GAP: f32 = 16.0;
-/// `--chat-block-gap: 10px` — gap between thinking / tool-group / msg inside
-/// one assistant turn.
-pub(super) const CHAT_BLOCK_GAP: f32 = 10.0;
-/// `--chat-section-gap: 18px` — gap between major conversation sections.
-pub(super) const CHAT_SECTION_GAP: f32 = 18.0;
-/// `.chat` outer padding (16px top / 14px inline / 20px bottom).
-pub(super) const CHAT_PADDING_TOP: f32 = 16.0;
-pub(super) const CHAT_PADDING_BOTTOM: f32 = 20.0;
-
-// --- Reference: Web transition durations (`--duration-fast/base/slow`). ---
-pub(super) const DURATION_FAST: Duration = Duration::from_millis(120);
-pub(super) const DURATION_BASE: Duration = Duration::from_millis(160);
-pub(super) const DURATION_SLOW: Duration = Duration::from_millis(260);
-
-/// Standard 60fps UI coalesce tick for streaming / progressive updates.
-/// Mirrors `gpui-component`'s `AutoScroll` cadence.
-pub(super) const FRAME_TICK_60FPS: Duration = Duration::from_millis(16);
 
 #[cfg(test)]
 mod tests {
@@ -448,54 +286,5 @@ mod tests {
         assert_eq!(resolve_color_for(TEXT_FAINT, true, false), 0x6b7280);
         assert_eq!(resolve_color_for(ACCENT_HOVER, true, false), 0x79b8ff);
         assert_eq!(resolve_color_for(DONE, true, false), 0xa371f7);
-    }
-
-    #[test]
-    fn alpha_tokens_pack_reference_alpha_into_low_byte() {
-        // Light mode accent-bd is opaque #cfe6ff.
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::AccentBorder),
-            rgba_u32(0xcfe6ff, 0xff)
-        );
-        // Dark mode accent-bd is rgba(88,166,255,.28) → 0x47.
-        DARK_MODE.store(true, Ordering::Relaxed);
-        MONO_ACCENT.store(false, Ordering::Relaxed);
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::AccentBorder),
-            rgba_u32(0x58a6ff, 0x47)
-        );
-
-        // Selected / Hover are 8% / 5% overlays of the base bg.
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::Selected),
-            rgba_u32(0xffffff, 0x14)
-        );
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::Hover),
-            rgba_u32(0xffffff, 0x0d)
-        );
-
-        // Restore light mode.
-        DARK_MODE.store(false, Ordering::Relaxed);
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::Selected),
-            rgba_u32(0x000000, 0x14)
-        );
-        assert_eq!(
-            resolve_color_with_alpha(ColorToken::Hover),
-            rgba_u32(0x000000, 0x0d)
-        );
-    }
-
-    #[test]
-    fn text_ladder_and_chat_spacing_pin_reference_values() {
-        assert_eq!(text_xs_font_px(), font_px(12.0));
-        assert_eq!(text_sm_font_px(), font_px(13.0));
-        assert_eq!(text_base_font_px(), font_px(14.0));
-        assert_eq!(text_lg_font_px(), font_px(16.0));
-        assert_eq!(text_xl_font_px(), font_px(18.0));
-        assert_eq!(CHAT_TURN_GAP, 16.0);
-        assert_eq!(CHAT_BLOCK_GAP, 10.0);
-        assert_eq!(CHAT_SECTION_GAP, 18.0);
     }
 }

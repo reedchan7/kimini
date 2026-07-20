@@ -16,10 +16,11 @@
 //! side and now here too.
 //!
 //! State lifecycle:
-//! - [`Streaming::ensure`] creates the entities lazily when a turn starts.
-//! - [`Streaming::sync`] is called on each delta; no-op if unchanged.
-//! - [`Streaming::reset`] drops both entities when the turn completes or
-//!   the active session changes, so the next turn starts from a clean parse.
+//! - [`start_streaming`] creates the entities when a turn starts.
+//! - [`Streaming::sync_assistant`] / [`Streaming::sync_thinking`] run on each
+//!   delta; no-op if unchanged.
+//! - Clearing `Shell::streaming` drops both entities when the turn completes
+//!   or the active session changes, so the next turn starts from a clean parse.
 
 use gpui::{AppContext, Context, Entity};
 use gpui_component::text::{TextView, TextViewState};
@@ -30,15 +31,6 @@ use crate::native::app::Shell;
 enum Slot {
     Assistant,
     Thinking,
-}
-
-impl Slot {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Slot::Assistant => "assistant",
-            Slot::Thinking => "thinking",
-        }
-    }
 }
 
 /// Incremental streaming state for the active conversation.
@@ -56,15 +48,6 @@ pub(in crate::native) struct Streaming {
 }
 
 impl Streaming {
-    /// Lazily create the streaming entities the first time a turn produces
-    /// deltas for the active conversation. Returns the existing pair on
-    /// subsequent calls so the parsed AST survives across deltas.
-    pub fn ensure(&mut self, cx: &mut Context<Shell>) {
-        // Entities exist by construction; nothing to do. Kept for API
-        // symmetry with the reset path.
-        let _ = cx;
-    }
-
     /// Push any new suffix of `target` into the assistant entity. Returns
     /// true if the view should be remeasured (the text actually grew).
     pub fn sync_assistant(&mut self, target: &str, cx: &mut Context<Shell>) -> bool {
@@ -83,16 +66,6 @@ impl Streaming {
 
     pub fn thinking_entity(&self) -> &Entity<TextViewState> {
         &self.thinking
-    }
-
-    /// Current snapshot of the assistant text — used by callers that still
-    /// need the full string (e.g. accessibility labels).
-    pub fn assistant_text(&self) -> &str {
-        &self.assistant_text
-    }
-
-    pub fn thinking_text(&self) -> &str {
-        &self.thinking_text
     }
 
     fn sync_slot(
