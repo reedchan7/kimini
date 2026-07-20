@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, Context, Role, div, prelude::*, px, relative,
+    Animation, AnimationExt, AnyElement, Context, Corners, FontWeight, Role, div, prelude::*, px,
+    relative,
 };
 use gpui_component::{StyledExt, text::TextView};
 
@@ -61,7 +62,9 @@ impl Shell {
             .flex()
             .justify_center()
             .px_3()
-            .pb_5()
+            // Web `--chat-turn-gap` between turns. Use the gap token directly
+            // so changing the design constant later ripples here.
+            .pb(px(CHAT_TURN_GAP))
             .child(
                 div()
                     .w_full()
@@ -71,13 +74,31 @@ impl Shell {
                     .child(
                         div()
                             .when(is_user, |body| {
-                                body.max_w(gpui::relative(0.82))
-                                    .rounded_lg()
-                                    .bg(theme_rgb(SURFACE_SUBTLE))
-                                    .px_3()
-                                    .py_2()
+                                // Web `.u-bub`: max-width 78%, accent-tinted fill,
+                                // accent border, asymmetric "tail" radius
+                                // (16/16/6/16), 11×15 padding, subtle shadow.
+                                body.max_w(relative(0.78))
+                                    .bg(theme_rgb(ACCENT_SOFT))
+                                    .border_1()
+                                    .border_color(theme_rgba(ACCENT_BORDER))
+                                    .corner_radii(Corners {
+                                        top_left: px(16.0),
+                                        top_right: px(16.0),
+                                        // Tail corner at bottom-right.
+                                        bottom_right: px(6.0),
+                                        bottom_left: px(16.0),
+                                    })
+                                    .px(px(15.0))
+                                    .py(px(11.0))
+                                    .shadow_xs()
+                                    .text_size(text_lg_font_px())
                             })
-                            .when(!is_user, |body| body.w_full())
+                            .when(!is_user, |body| {
+                                // Web `.a-msg`: 94% column, medium-weight body.
+                                body.max_w(relative(0.94))
+                                    .w(relative(0.94))
+                                    .font_weight(FontWeight::MEDIUM)
+                            })
                             .when(row.role == MessageRole::System, |body| {
                                 body.border_l_2()
                                     .border_color(theme_rgb(BORDER_STRONG))
@@ -224,16 +245,16 @@ impl Shell {
                         .gap_1()
                         .child(
                             streaming_text_view(&entity)
-                                .text_size(body_font_px())
-                                .line_height(relative(1.55)),
+                                .text_size(content_font_px())
+                                .line_height(relative(1.6)),
                         )
                         .child(self.streaming_caret(key, cx))
                         .into_any_element()
                 } else {
                     TextView::markdown(("message-markdown", key), text.clone())
                         .selectable(true)
-                        .text_size(body_font_px())
-                        .line_height(relative(1.55))
+                        .text_size(content_font_px())
+                        .line_height(relative(1.6))
                         .into_any_element()
                 }
             }
@@ -281,7 +302,7 @@ impl Shell {
         };
         div()
             .id(("thinking-trace", key))
-            .mt_2()
+            .mt(px(CHAT_BLOCK_GAP))
             .focusable()
             .tab_stop(true)
             .role(Role::Button)

@@ -38,6 +38,9 @@ pub(super) enum ColorToken {
     TextFaint,
     /// `--color-accent-hover`: #0f6fe0 (light) / #79b8ff (dark).
     AccentHover,
+    /// `--color-accent-bd`: #cfe6ff (light) / rgba(88,166,255,.28) (dark, 28%).
+    /// Used for accent-tinted borders (user bubble, accent chip, focused card).
+    AccentBorder,
     /// `--color-done`: #8250df (light) / #a371f7 (dark). PR-merged, completed
     /// non-success states.
     Done,
@@ -67,6 +70,7 @@ pub(super) const SURFACE_RAISED: ColorToken = ColorToken::SurfaceRaised;
 pub(super) const SURFACE_SUNKEN: ColorToken = ColorToken::SurfaceSunken;
 pub(super) const TEXT_FAINT: ColorToken = ColorToken::TextFaint;
 pub(super) const ACCENT_HOVER: ColorToken = ColorToken::AccentHover;
+pub(super) const ACCENT_BORDER: ColorToken = ColorToken::AccentBorder;
 pub(super) const DONE: ColorToken = ColorToken::Done;
 pub(super) const TEXT_ON_ACCENT: ColorToken = ColorToken::TextOnAccent;
 
@@ -150,6 +154,21 @@ pub(super) fn body_font_px() -> Pixels {
     font_px(14.0)
 }
 
+/// `--content-font-size` (15px at default base 14). The Web reference uses
+/// base+1 for all markdown body text — assistant paragraphs, user bubble
+/// body, list items. Use this for the message reading measure instead of
+/// [`body_font_px`] so the chat column matches the Web exactly.
+pub(super) fn content_font_px() -> Pixels {
+    font_px(15.0)
+}
+
+/// `--text-lg` (16px). The Web user bubble clamps its body to
+/// `max(16px, ui-font-size-xl)`, so user prompts render at least 16px even
+/// when the global font-size setting is at the default.
+pub(super) fn text_lg_font_px() -> Pixels {
+    font_px(16.0)
+}
+
 /// Default chrome labels: sidebar rows, toolbar title, settings rows.
 pub(super) fn ui_font_px() -> Pixels {
     font_px(13.0)
@@ -224,6 +243,34 @@ fn resolve_color_for(color: ColorToken, dark: bool, mono: bool) -> u32 {
         (true, ERROR_SOFT) => 0x382022,
         (true, ERROR_SOFT_ACTIVE) => 0x4a2424,
         (_, ACCENT | ACCENT_SOFT) => unreachable!("accent tokens return above"),
+        (_, ColorToken::AccentBorder) => {
+            unreachable!("AccentBorder is alpha; use theme_rgba")
+        }
+    }
+}
+
+/// Resolve a token that carries alpha (its reference value uses
+/// `rgba(...)`). Currently only `AccentBorder` (`--color-accent-bd`). Opaque
+/// tokens stay on the [`theme_rgb`] path.
+pub(super) fn theme_rgba(color: ColorToken) -> Rgba {
+    gpui::rgba(resolve_color_with_alpha(color))
+}
+
+/// `rgba(r, g, b, alpha)` packed as `0xRRGGBBAA` (alpha in the low byte).
+const fn rgba_u32(rgb: u32, alpha: u8) -> u32 {
+    (rgb << 8) | (alpha as u32)
+}
+
+fn resolve_color_with_alpha(color: ColorToken) -> u32 {
+    let dark = is_dark();
+    let mono = MONO_ACCENT.load(Ordering::Relaxed);
+    match color {
+        ColorToken::AccentBorder => match (dark, mono) {
+            (false, _) => rgba_u32(0xcfe6ff, 0xff),
+            (true, false) => rgba_u32(0x58a6ff, 0x47), // 28%
+            (true, true) => rgba_u32(0x3d444d, 0xff),
+        },
+        _ => unreachable!("only AccentBorder carries alpha in this codebase"),
     }
 }
 
@@ -234,6 +281,14 @@ pub(super) const TERMINAL_PANEL_WIDTH: f32 = 520.0;
 pub(super) const FILE_PANEL_WIDTH: f32 = 440.0;
 pub(super) const CONTENT_WIDTH: f32 = 760.0;
 pub(super) const HEADER_HEIGHT: f32 = 48.0;
+
+// --- Reference: Kimi Code Web chat spacing tokens. ---
+/// `--chat-turn-gap: 16px` — vertical gap between user-turn and assistant-turn
+/// roots in the conversation list.
+pub(super) const CHAT_TURN_GAP: f32 = 16.0;
+/// `--chat-block-gap: 10px` — gap between thinking / tool-group / msg inside
+/// one assistant turn.
+pub(super) const CHAT_BLOCK_GAP: f32 = 10.0;
 
 #[cfg(test)]
 mod tests {
@@ -286,5 +341,30 @@ mod tests {
         assert_eq!(resolve_color_for(TEXT_FAINT, true, false), 0x6b7280);
         assert_eq!(resolve_color_for(ACCENT_HOVER, true, false), 0x79b8ff);
         assert_eq!(resolve_color_for(DONE, true, false), 0xa371f7);
+    }
+
+    #[test]
+    fn accent_border_carries_alpha_in_dark_mode() {
+        // Light mode accent-bd is opaque #cfe6ff.
+        DARK_MODE.store(false, Ordering::Relaxed);
+        MONO_ACCENT.store(false, Ordering::Relaxed);
+        assert_eq!(
+            resolve_color_with_alpha(ColorToken::AccentBorder),
+            rgba_u32(0xcfe6ff, 0xff)
+        );
+        // Dark mode accent-bd is rgba(88,166,255,.28) → 0x47.
+        DARK_MODE.store(true, Ordering::Relaxed);
+        assert_eq!(
+            resolve_color_with_alpha(ColorToken::AccentBorder),
+            rgba_u32(0x58a6ff, 0x47)
+        );
+    }
+
+    #[test]
+    fn content_and_text_lg_pin_web_font_sizes() {
+        assert_eq!(content_font_px(), font_px(15.0));
+        assert_eq!(text_lg_font_px(), font_px(16.0));
+        assert_eq!(CHAT_TURN_GAP, 16.0);
+        assert_eq!(CHAT_BLOCK_GAP, 10.0);
     }
 }

@@ -40,7 +40,7 @@ impl Shell {
 
         div()
             .id(("tool-group", key))
-            .mt_2()
+            .mt(px(CHAT_BLOCK_GAP))
             .rounded_lg()
             .border_1()
             .border_color(theme_rgb(if failed { ERROR } else { BORDER }))
