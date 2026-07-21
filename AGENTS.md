@@ -126,8 +126,11 @@ the Kimi daemon's typed `/api/v1` REST and WebSocket contracts directly.
   (builds `dist/`; not a plan-only mode). Claude Code: `.claude/skills/ship`
   → `.agents/skills/ship`.
 - CI and release Actions remain manual (`workflow_dispatch`).
-- Native startup discovers `~/.kimi-code/server/lock` plus `server.token`,
-  health-probes the daemon, and starts `kimi server run` when absent.
+- Startup (Native and Web) discovers `~/.kimi-code/server/instances/*.json`
+  (kimi-code 0.28+), falls back to legacy `server/lock`, reads `server.token`,
+  health-probes candidates, and starts `kimi web --no-open` when none are
+  healthy. The spawned server is process-group detached so Native and Web can
+  share one origin without killing it when either app quits.
 - Native modules stay directional: `daemon` and `api` feed `protocol` and the
   pure `model`; `native` renders projected state; `legacy_web` remains isolated.
 - The native browser child view is on demand. It is for human preview and OAuth;

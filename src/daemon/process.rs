@@ -74,13 +74,29 @@ fn login_shell_which() -> Option<PathBuf> {
     None
 }
 
+/// Start a shared local Kimi Code server when none is healthy.
+///
+/// kimi-code 0.28+ replaced `kimi server run` with foreground-only
+/// `kimi web`. We pass `--no-open` so Kimini owns the UI (Native or Web shell)
+/// and put the child in its own process group so it can outlive either app —
+/// Native and Web share the same REST/WS origin and token.
 pub(super) fn spawn_daemon(kimi: &Path) -> std::io::Result<()> {
-    let mut child = Command::new(kimi)
-        .args(["server", "run", "--log-level", "error"])
+    let mut command = Command::new(kimi);
+    command
+        .args(["web", "--no-open", "--log-level", "error"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
+        .stderr(Stdio::null());
+
+    // Detach from Kimini's process group so quitting Kimini.app / Kimini Web.app
+    // does not SIGHUP the shared server the other client may still be using.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+
+    let mut child = command.spawn()?;
     thread::spawn(move || {
         let _ = child.wait();
     });

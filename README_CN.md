@@ -100,9 +100,11 @@ irm https://code.kimi.com/kimi-code/install.ps1 | iex
 Linux 需要 GTK 3、WebKitGTK 4.1、Vulkan 与桌面 portal。解压归档后运行
 `bin/kimini` 或 `bin/kimini-web`；`share/` 中已包含 desktop entry 与图标。
 
-Kimini 会读取平台用户目录下的 `.kimi-code/server/lock` 和 `server.token`，
-探测 daemon 状态，并在需要时执行 `kimi server run`。凭据只进入请求头或
-WebSocket 子协议，不会写入浏览器 URL。
+Kimini（原生与 Web）会读取 `.kimi-code/server/instances/*.json`（kimi-code
+0.28+），兼容旧版 `server/lock`，加载 `server.token`，对候选地址做健康检查，
+并在没有可用服务时执行 `kimi web --no-open`。该 server 由两端共享，并从 App
+进程组中分离。API 凭据只进入请求头或 WebSocket 子协议；Web 壳仅在 URL
+fragment（`#token=`）中传递本地 server token。
 
 ## 原生体验
 

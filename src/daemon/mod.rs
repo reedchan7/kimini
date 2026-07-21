@@ -1,4 +1,9 @@
-//! Discovery and lifecycle access for the shared local Kimi Code daemon.
+//! Discovery and lifecycle access for the shared local Kimi Code server.
+//!
+//! Native (`kimini`) and Web (`kimini-web`) share this path: probe recorded
+//! instances / legacy lock / default loopback, then start `kimi web --no-open`
+//! when nothing is healthy. The spawned server is detached so either app can
+//! exit without tearing down the peer.
 
 mod connection;
 mod discovery;

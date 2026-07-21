@@ -103,10 +103,12 @@ On Linux, install GTK 3, WebKitGTK 4.1, Vulkan, and your desktop portal, then
 extract the archive and run `bin/kimini` or `bin/kimini-web`. A desktop entry and
 icon are included under `share/`.
 
-Kimini reads the platform home directory's `.kimi-code/server/lock` and
-`server.token`, health-probes the daemon, and starts `kimi server run` when needed.
-Credentials remain in request headers or the WebSocket subprotocol; they never
-enter browser URLs.
+Kimini (Native and Web) reads `.kimi-code/server/instances/*.json` (kimi-code
+0.28+), falls back to legacy `server/lock`, loads `server.token`, health-probes
+candidates, and starts `kimi web --no-open` when nothing is healthy. The server
+is shared and detached from the app process. API credentials stay in request
+headers or the WebSocket subprotocol; the Web shell only passes the local
+server token in the URL fragment (`#token=`).
 
 ## Native experience
 

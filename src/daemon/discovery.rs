@@ -28,6 +28,10 @@ impl Status {
     }
 }
 
+/// Discover a healthy local Kimi Code server, starting one when needed.
+///
+/// Used by both Native and Web: attach to an existing healthy instance first;
+/// only spawn when every candidate fails the health probe.
 pub fn discover_connection(stop: &AtomicBool, notify: &dyn Fn(Status)) -> Option<Connection> {
     if let Some(connection) = probe() {
         return Some(connection);
